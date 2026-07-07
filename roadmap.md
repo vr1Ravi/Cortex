@@ -51,7 +51,7 @@
 - [x] **1.3** **Dependency Injection** — the heart of FastAPI (`Depends`, sub-deps, yield deps) *(DONE)*
 - [x] **1.4** Routers & scalable project structure (`APIRouter`, versioning) *(DONE)*
 - [x] **1.5** Error handling — exceptions, handlers, status codes, validation errors *(DONE)*
-- [ ] **1.6** OpenAPI/docs, tags, response models → **build the Cortex API skeleton**
+- [x] **1.6** OpenAPI/docs, tags, response models → **build the Cortex API skeleton** *(DONE)*
 
 ### Phase 2 — Data & Persistence · 6 sessions
 - [ ] **2.1** Async **SQLAlchemy 2.0** — engine, sessions, async setup with Postgres
@@ -137,5 +137,6 @@
 | 2026-07-06 | 1.3 Dependency Injection | Done. Added `pagination_params` + `get_document_or_404` deps via `Annotated[T, Depends(fn)]`; refactored GET endpoints. Learned: deps are functions, their params resolved by three-door rule + hoisted to OpenAPI, can raise, sub-deps, testability via override. |
 | 2026-07-07 | 1.4 Routers & structure | Done. Moved document endpoints + deps + store into `app/api/documents.py` (`APIRouter`, prefix `/documents`, tag); `main.py` now thin assembler w/ `include_router`. Hit real bug (`word_Count` typo) that lint missed → lesson: green lint ≠ working; test behavior. |
 | 2026-07-07 | 1.5 Error handling | Done. Added `app/core/exceptions.py` (`CortexError`/`DocumentNotFoundError`), registered `@app.exception_handler` in main.py, dependency now raises domain error (HTTP-agnostic). Learned status codes (401 vs 403 etc.), custom exception classes (`self.x`/`super().__init__`), automatic 422. |
+| 2026-07-08 | 1.6 Complete CRUD (finale) | Done. Added `DocumentUpdate` schema + `PUT`/`DELETE` endpoints reusing `get_document_or_404`; `model_copy(update=...)`, 204 for delete. Full CRUD lifecycle verified end-to-end. Wrong `response_model` (`DocumentUpdate`) silently stripped fields → reinforced 1.2 filter lesson. **Phase 1 COMPLETE.** |
 
 *(We'll tick boxes above and add rows here as we go.)*

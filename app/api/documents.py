@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 
 from app.core.exceptions import DocumentNotFoundError
-from app.schemas.document import DocumentCreate, DocumentResponse
+from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -39,6 +39,30 @@ async def create_document(doc: DocumentCreate) -> DocumentResponse:
     )
     _documents[doc_id] = stored
     return stored
+
+@router.put("/{doc_id}", response_model= DocumentResponse, summary="Update a document")
+async def update_document(
+    update: DocumentUpdate,
+    existing: Annotated[DocumentResponse, Depends(get_document_or_404)]
+) -> DocumentResponse:
+    """Full-replace update. `get_document_or_404` guarantees the doc exists (or 404s)."""
+    updated = existing.model_copy(
+        update = {
+        **update.model_dump(),
+        "word_count": len(update.content.split())
+    }
+    )
+    _documents[existing.id] = updated
+    return updated
+
+@router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a document")
+async def delete_document(
+    existing: Annotated[DocumentResponse, Depends(get_document_or_404)]
+) -> None:
+    """Delete a document. Returns 204 with no body. Reuses the same 404 dependency."""
+    del _documents[existing.id]
+
+
 
 @router.get("/{doc_id}", response_model=DocumentResponse)
 async def get_document(

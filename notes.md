@@ -163,3 +163,24 @@ input). Exception classes are just classes: `self.x = x` stores data for the han
 but not authorized (known, but access restricted). (2) Separation of concerns — business
 logic raises a pure domain error and stays HTTP-agnostic (reusable in jobs/tests); the
 HTTP mapping lives once in the web layer → consistent, reusable error handling.
+
+---
+
+## 1.6 — Completing CRUD (Phase 1 finale)
+
+**Gotcha:** Set `status_code` only when it differs from the default `200`: POST→201,
+DELETE→**204 No Content** (empty body), PUT→200 (default, returns updated resource).
+PUT = full replace; PATCH = partial (`model_dump(exclude_unset=True)`). Reuse
+`get_document_or_404` as a dependency in GET/PUT/DELETE → existence guarantee + consistent
+404, no duplication. `existing.model_copy(update={...})` copies an object changing only
+some fields (keeps id/created_at, swaps title/content/tags, recomputes word_count).
+Pointing `response_model` at the wrong schema (e.g. `DocumentUpdate`) silently strips
+fields with no error — same filter mechanism as 1.2. `summary=` sets the /docs label;
+the docstring becomes the description.
+
+**❓ Q:** (1) What two things does reusing `get_document_or_404` in PUT/DELETE give you?
+(2) Why does DELETE return 204 while PUT returns 200?
+
+**A:** (1) A guarantee the document exists (fetch) + consistent 404 handling, with zero
+duplication (DRY). (2) DELETE has nothing to return (resource gone) → 204 empty body;
+PUT succeeds AND returns the updated resource → 200.

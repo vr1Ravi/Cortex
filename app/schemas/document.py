@@ -15,6 +15,8 @@ class DocumentBase(BaseModel):
 
 class DocumentCreate(DocumentBase):
     """ What client SENDS to create a document (No server generated fields)"""
+class DocumentUpdate(DocumentBase):
+    """What a client SENDS to update a document (full replace; no server fields)."""
 
 class DocumentResponse(DocumentBase):
     """ What the API RETURNS (adds server-generated field)"""
