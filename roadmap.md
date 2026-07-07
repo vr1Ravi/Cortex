@@ -50,7 +50,7 @@
 - [x] **1.2** Pydantic models: `response_model`, validation, serialization, config *(DONE)*
 - [x] **1.3** **Dependency Injection** — the heart of FastAPI (`Depends`, sub-deps, yield deps) *(DONE)*
 - [x] **1.4** Routers & scalable project structure (`APIRouter`, versioning) *(DONE)*
-- [ ] **1.5** Error handling — exceptions, handlers, status codes, validation errors
+- [x] **1.5** Error handling — exceptions, handlers, status codes, validation errors *(DONE)*
 - [ ] **1.6** OpenAPI/docs, tags, response models → **build the Cortex API skeleton**
 
 ### Phase 2 — Data & Persistence · 6 sessions
@@ -136,5 +136,6 @@
 | 2026-07-06 | 1.2 Request/response schemas | Done. Split into `DocumentBase`/`DocumentCreate`/`DocumentResponse`; added `response_model` + `status_code=201`; list returns JSON array; 404 via HTTPException (taste of 1.5). Proved response_model filters out undeclared fields (password_hash demo). |
 | 2026-07-06 | 1.3 Dependency Injection | Done. Added `pagination_params` + `get_document_or_404` deps via `Annotated[T, Depends(fn)]`; refactored GET endpoints. Learned: deps are functions, their params resolved by three-door rule + hoisted to OpenAPI, can raise, sub-deps, testability via override. |
 | 2026-07-07 | 1.4 Routers & structure | Done. Moved document endpoints + deps + store into `app/api/documents.py` (`APIRouter`, prefix `/documents`, tag); `main.py` now thin assembler w/ `include_router`. Hit real bug (`word_Count` typo) that lint missed → lesson: green lint ≠ working; test behavior. |
+| 2026-07-07 | 1.5 Error handling | Done. Added `app/core/exceptions.py` (`CortexError`/`DocumentNotFoundError`), registered `@app.exception_handler` in main.py, dependency now raises domain error (HTTP-agnostic). Learned status codes (401 vs 403 etc.), custom exception classes (`self.x`/`super().__init__`), automatic 422. |
 
 *(We'll tick boxes above and add rows here as we go.)*

@@ -141,3 +141,25 @@ place); routers keep each domain in its own file with `main.py` as a thin assemb
 modular, no merge conflicts. (2) `word_Count` is valid Python, so the linter (syntax/
 style only) had nothing to flag; only running the code / an automated test that
 exercises the endpoint catches logic & wiring bugs.
+
+---
+
+## 1.5 — Error handling
+
+**Gotcha:** Prefer **custom domain exceptions + a central handler** over raw
+`HTTPException` in your logic: business code raises a pure concept
+(`DocumentNotFoundError`), and one `@app.exception_handler(...)` maps it → HTTP
+response app-wide. Keeps business logic HTTP-agnostic (works in jobs/tests too) and
+makes errors consistent. Status codes: 400 bad request, **401 = don't know who you are
+(authn)**, **403 = know you but not allowed (authz)**, 404 not found, 409 conflict,
+422 validation (FastAPI does this automatically, reports ALL errors with loc/type/msg/
+input). Exception classes are just classes: `self.x = x` stores data for the handler;
+`super().__init__(msg)` sets the message so `str(exc)` works.
+
+**❓ Q:** (1) Difference between 401 and 403? (2) Architectural benefit of moving the
+404 from a raw `HTTPException` in the dependency to a domain exception + handler?
+
+**A:** (1) 401 = not authenticated (server doesn't know who you are); 403 = authenticated
+but not authorized (known, but access restricted). (2) Separation of concerns — business
+logic raises a pure domain error and stays HTTP-agnostic (reusable in jobs/tests); the
+HTTP mapping lives once in the web layer → consistent, reusable error handling.

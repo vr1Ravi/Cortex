@@ -3,8 +3,9 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
+from app.core.exceptions import DocumentNotFoundError
 from app.schemas.document import DocumentCreate, DocumentResponse
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -20,7 +21,7 @@ def pagination_params(skip: int = 0, limit: int = 10) -> dict:
 def get_document_or_404(doc_id: int) -> DocumentResponse:
     doc = _documents.get(doc_id)
     if doc is None:
-        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+        raise DocumentNotFoundError(doc_id)
     return doc
 
 # --- Endpoints (note: paths are RELATIVE to the router's /documents prefix) ---
