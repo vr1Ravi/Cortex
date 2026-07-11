@@ -3,19 +3,19 @@
 > **Goal:** Reach the depth of a 2–3 YOE **AI software engineer** — not surface-level CRUD.
 > **Method:** Concept-first → build → review → "why?" check. One focused chunk per session.
 > **Vehicle project:** **Cortex** — an AI Knowledge Assistant (document Q&A SaaS backend:
-> users upload docs → chat with an AI that answers *from their docs* with citations).
+> users upload docs → chat with an AI that answers _from their docs_ with citations).
 
 ---
 
 ## ⏱️ Time budget & cadence
 
-| | |
-|---|---|
-| Weekdays | 2 hrs/day → **1 session/day** |
-| Weekends | 4 hrs/day → **2 sessions/day** |
-| Weekly capacity | **18 hrs ≈ 9 sessions/week** |
-| Session length | ~2 hrs (concept + build + review) |
-| Total course | **~42 sessions · ~84 focused hours** |
+|                    |                                                          |
+| ------------------ | -------------------------------------------------------- |
+| Weekdays           | 2 hrs/day → **1 session/day**                            |
+| Weekends           | 4 hrs/day → **2 sessions/day**                           |
+| Weekly capacity    | **18 hrs ≈ 9 sessions/week**                             |
+| Session length     | ~2 hrs (concept + build + review)                        |
+| Total course       | **~42 sessions · ~84 focused hours**                     |
 | Realistic calendar | **~8 weeks** (buffer for practice, debugging & revision) |
 
 > A "session" = one 2-hr block. On weekends you'll do 2 per day. The timeline below
@@ -25,43 +25,47 @@
 
 ## 🗺️ The 7 phases at a glance
 
-| Phase | Theme | Sessions | Hours |
-|------|-------|:--------:|:-----:|
-| 0 | Foundations (async, typing, tooling) | 3 | 6 |
-| 1 | FastAPI core (Pydantic, DI, routers) | 6 | 12 |
-| 2 | Data & persistence (async SQLAlchemy, Alembic) | 6 | 12 |
-| 3 | Advanced backend (auth, Celery, Redis, WebSockets) | 8 | 16 |
-| 4 | LLM integration (Claude API, streaming, tools) | 5 | 10 |
-| 5 | RAG + LangChain (embeddings, pgvector, agents) | 8 | 16 |
-| 6 | Ship it (testing, Docker, CI/CD, observability) | 6 | 12 |
-| | **Total** | **42** | **84** |
+| Phase | Theme                                              | Sessions | Hours  |
+| ----- | -------------------------------------------------- | :------: | :----: |
+| 0     | Foundations (async, typing, tooling)               |    3     |   6    |
+| 1     | FastAPI core (Pydantic, DI, routers)               |    6     |   12   |
+| 2     | Data & persistence (async SQLAlchemy, Alembic)     |    6     |   12   |
+| 3     | Advanced backend (auth, Celery, Redis, WebSockets) |    8     |   16   |
+| 4     | LLM integration (Claude API, streaming, tools)     |    5     |   10   |
+| 5     | RAG + LangChain (embeddings, pgvector, agents)     |    8     |   16   |
+| 6     | Ship it (testing, Docker, CI/CD, observability)    |    6     |   12   |
+|       | **Total**                                          |  **42**  | **84** |
 
 ---
 
 ## 📚 Phase-by-phase sessions
 
 ### Phase 0 — Foundations · 3 sessions
-- [x] **0.1** Async & the event loop — sync vs async, the blocking trap *(DONE)*
-- [x] **0.2** Type hints deep + intro to **Pydantic v2** (validation from types) *(DONE)*
-- [x] **0.3** Project structure, tooling (git, `.gitignore`, ruff, `requirements.txt`) *(DONE)*
+
+- [x] **0.1** Async & the event loop — sync vs async, the blocking trap _(DONE)_
+- [x] **0.2** Type hints deep + intro to **Pydantic v2** (validation from types) _(DONE)_
+- [x] **0.3** Project structure, tooling (git, `.gitignore`, ruff, `requirements.txt`) _(DONE)_
 
 ### Phase 1 — FastAPI Core · 6 sessions
-- [x] **1.1** Path / query / body params; request lifecycle *(DONE)*
-- [x] **1.2** Pydantic models: `response_model`, validation, serialization, config *(DONE)*
-- [x] **1.3** **Dependency Injection** — the heart of FastAPI (`Depends`, sub-deps, yield deps) *(DONE)*
-- [x] **1.4** Routers & scalable project structure (`APIRouter`, versioning) *(DONE)*
-- [x] **1.5** Error handling — exceptions, handlers, status codes, validation errors *(DONE)*
-- [x] **1.6** OpenAPI/docs, tags, response models → **build the Cortex API skeleton** *(DONE)*
+
+- [x] **1.1** Path / query / body params; request lifecycle _(DONE)_
+- [x] **1.2** Pydantic models: `response_model`, validation, serialization, config _(DONE)_
+- [x] **1.3** **Dependency Injection** — the heart of FastAPI (`Depends`, sub-deps, yield deps) _(DONE)_
+- [x] **1.4** Routers & scalable project structure (`APIRouter`, versioning) _(DONE)_
+- [x] **1.5** Error handling — exceptions, handlers, status codes, validation errors _(DONE)_
+- [x] **1.6** OpenAPI/docs, tags, response models → **build the Cortex API skeleton** _(DONE)_
 
 ### Phase 2 — Data & Persistence · 6 sessions
-- [ ] **2.1** Async **SQLAlchemy 2.0** — engine, sessions, async setup with Postgres
-- [ ] **2.2** Models & relationships (1-to-many, many-to-many)
-- [ ] **2.3** **Alembic** migrations — autogenerate, upgrade/downgrade, workflow
-- [ ] **2.4** Repository pattern & CRUD wired into DI
-- [ ] **2.5** Transactions, session lifecycle, unit-of-work
+
+- [x] **2.1** Async **SQLAlchemy 2.0** — engine, sessions, async setup with Postgres _(DONE)_
+- [x] **2.2** Models — `Document` ORM model (typed columns, defaults, ARRAY) _(DONE)_; relationships next (with `User`)
+- [x] **2.3** **Alembic** migrations — autogenerate, upgrade/downgrade, workflow _(DONE)_
+- [x] **2.4** Repository pattern & CRUD wired into DI _(DONE)_
+- [x] **2.5** Transactions, session lifecycle, unit-of-work _(DONE)_
 - [ ] **2.6** Performance: N+1 problem, eager loading, indexing
 
 ### Phase 3 — Advanced Backend · 8 sessions
+
 - [ ] **3.1** Auth I — password hashing, JWT creation/verification
 - [ ] **3.2** Auth II — OAuth2 password flow, `get_current_user` dependency
 - [ ] **3.3** Role-based access control (RBAC) & scopes
@@ -72,6 +76,7 @@
 - [ ] **3.8** File uploads → object storage, config/secrets (`pydantic-settings`), structured logging
 
 ### Phase 4 — LLM Integration · 5 sessions
+
 - [ ] **4.1** Calling the **Claude API** from a backend (SDK, messages, params)
 - [ ] **4.2** **Streaming** tokens to the client over SSE
 - [ ] **4.3** Prompt design + **structured outputs / tool use**
@@ -79,6 +84,7 @@
 - [ ] **4.5** Wire real AI chat into Cortex
 
 ### Phase 5 — RAG + LangChain · 8 sessions
+
 - [ ] **5.1** Embeddings — what they are, how similarity search works
 - [ ] **5.2** Chunking strategies (size, overlap, semantic) + trade-offs
 - [ ] **5.3** Vector DBs — **pgvector** setup & queries (+ Chroma overview)
@@ -89,6 +95,7 @@
 - [ ] **5.8** Building an **agent** with tools (function calling loop)
 
 ### Phase 6 — Ship It Like a Pro · 6 sessions
+
 - [ ] **6.1** Testing I — pytest, async tests, `httpx` test client
 - [ ] **6.2** Testing II — fixtures, DB test setup, **mocking the LLM**
 - [ ] **6.3** **Docker** + docker-compose (app + Postgres + Redis)
@@ -100,16 +107,16 @@
 
 ## 📅 8-week timeline (starting Fri, Jul 3, 2026)
 
-| Week | Dates (2026) | Focus | Milestone |
-|:----:|--------------|-------|-----------|
-| **1** | Jul 3 – Jul 9 | Finish Phase 0 → Phase 1 (1.1–1.4) | Async understood; Cortex routes take shape |
-| **2** | Jul 10 – Jul 16 | Phase 1 (1.5–1.6) → Phase 2 (2.1–2.3) | **API skeleton runs**; DB + migrations live |
-| **3** | Jul 17 – Jul 23 | Phase 2 (2.4–2.6) → Phase 3 (3.1–3.2) | Persistent users/docs; **login works** |
-| **4** | Jul 24 – Jul 30 | Phase 3 (3.3–3.7) | RBAC, Redis, Celery, WebSockets in place |
-| **5** | Jul 31 – Aug 6 | Phase 3 (3.8) → Phase 4 (4.1–4.4) | Uploads working; **backend talks to Claude** |
-| **6** | Aug 7 – Aug 13 | Phase 4 (4.5) → Phase 5 (5.1–5.4) | **AI chat in Cortex**; embeddings + retrieval |
-| **7** | Aug 14 – Aug 20 | Phase 5 (5.5–5.8) | **Full RAG + agent working end-to-end** |
-| **8** | Aug 21 – Aug 27 | Phase 6 (6.1–6.6) | Tested, Dockerized, deployed → **portfolio-ready** 🎉** |
+| Week  | Dates (2026)    | Focus                                 | Milestone                                                 |
+| :---: | --------------- | ------------------------------------- | --------------------------------------------------------- |
+| **1** | Jul 3 – Jul 9   | Finish Phase 0 → Phase 1 (1.1–1.4)    | Async understood; Cortex routes take shape                |
+| **2** | Jul 10 – Jul 16 | Phase 1 (1.5–1.6) → Phase 2 (2.1–2.3) | **API skeleton runs**; DB + migrations live               |
+| **3** | Jul 17 – Jul 23 | Phase 2 (2.4–2.6) → Phase 3 (3.1–3.2) | Persistent users/docs; **login works**                    |
+| **4** | Jul 24 – Jul 30 | Phase 3 (3.3–3.7)                     | RBAC, Redis, Celery, WebSockets in place                  |
+| **5** | Jul 31 – Aug 6  | Phase 3 (3.8) → Phase 4 (4.1–4.4)     | Uploads working; **backend talks to Claude**              |
+| **6** | Aug 7 – Aug 13  | Phase 4 (4.5) → Phase 5 (5.1–5.4)     | **AI chat in Cortex**; embeddings + retrieval             |
+| **7** | Aug 14 – Aug 20 | Phase 5 (5.5–5.8)                     | **Full RAG + agent working end-to-end**                   |
+| **8** | Aug 21 – Aug 27 | Phase 6 (6.1–6.6)                     | Tested, Dockerized, deployed → **portfolio-ready** 🎉\*\* |
 
 > Buffer built in. If a topic needs an extra session, we take it — the calendar flexes.
 
@@ -127,16 +134,26 @@
 
 ## ✅ Progress log
 
-| Date | Session | Notes |
-|------|---------|-------|
-| 2026-07-03 | 0.1 Async & event loop | Done. Saw the blocking trap live (`/fast` = 4.7s frozen vs 0.0015s free). |
-| 2026-07-04 | 0.2 Type hints & Pydantic | Done. Type hints are enforced by Pydantic (coercion, constraints, nested models). Built a Cortex `Document` model. Learned: coercion (`"30"`→`30`), optional needs a default, constraints are opt-in. |
-| 2026-07-04 | 0.3 Structure & tooling | Done. Layered `app/` package, ruff lint/format, pinned `requirements.txt`, `.gitignore`, git init + first commit. Cortex boots: `GET /health` → `{"status":"ok"}`, auto OpenAPI docs. **Phase 0 complete.** |
-| 2026-07-04 | 1.1 Path/query/body params | Done. Built first real endpoints (POST/GET documents, in-memory store). Learned the 3-door rule, required-vs-optional (default decides), auto-422. Side lessons: `global` (reassign vs mutate), dict comprehension. |
-| 2026-07-06 | 1.2 Request/response schemas | Done. Split into `DocumentBase`/`DocumentCreate`/`DocumentResponse`; added `response_model` + `status_code=201`; list returns JSON array; 404 via HTTPException (taste of 1.5). Proved response_model filters out undeclared fields (password_hash demo). |
-| 2026-07-06 | 1.3 Dependency Injection | Done. Added `pagination_params` + `get_document_or_404` deps via `Annotated[T, Depends(fn)]`; refactored GET endpoints. Learned: deps are functions, their params resolved by three-door rule + hoisted to OpenAPI, can raise, sub-deps, testability via override. |
-| 2026-07-07 | 1.4 Routers & structure | Done. Moved document endpoints + deps + store into `app/api/documents.py` (`APIRouter`, prefix `/documents`, tag); `main.py` now thin assembler w/ `include_router`. Hit real bug (`word_Count` typo) that lint missed → lesson: green lint ≠ working; test behavior. |
-| 2026-07-07 | 1.5 Error handling | Done. Added `app/core/exceptions.py` (`CortexError`/`DocumentNotFoundError`), registered `@app.exception_handler` in main.py, dependency now raises domain error (HTTP-agnostic). Learned status codes (401 vs 403 etc.), custom exception classes (`self.x`/`super().__init__`), automatic 422. |
-| 2026-07-08 | 1.6 Complete CRUD (finale) | Done. Added `DocumentUpdate` schema + `PUT`/`DELETE` endpoints reusing `get_document_or_404`; `model_copy(update=...)`, 204 for delete. Full CRUD lifecycle verified end-to-end. Wrong `response_model` (`DocumentUpdate`) silently stripped fields → reinforced 1.2 filter lesson. **Phase 1 COMPLETE.** |
+| Date       | Session                      | Notes                                                                                                                                                                                                                                                                                                     |
+| ---------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-03 | 0.1 Async & event loop       | Done. Saw the blocking trap live (`/fast` = 4.7s frozen vs 0.0015s free).                                                                                                                                                                                                                                 |
+| 2026-07-04 | 0.2 Type hints & Pydantic    | Done. Type hints are enforced by Pydantic (coercion, constraints, nested models). Built a Cortex `Document` model. Learned: coercion (`"30"`→`30`), optional needs a default, constraints are opt-in.                                                                                                     |
+| 2026-07-04 | 0.3 Structure & tooling      | Done. Layered `app/` package, ruff lint/format, pinned `requirements.txt`, `.gitignore`, git init + first commit. Cortex boots: `GET /health` → `{"status":"ok"}`, auto OpenAPI docs. **Phase 0 complete.**                                                                                               |
+| 2026-07-04 | 1.1 Path/query/body params   | Done. Built first real endpoints (POST/GET documents, in-memory store). Learned the 3-door rule, required-vs-optional (default decides), auto-422. Side lessons: `global` (reassign vs mutate), dict comprehension.                                                                                       |
+| 2026-07-06 | 1.2 Request/response schemas | Done. Split into `DocumentBase`/`DocumentCreate`/`DocumentResponse`; added `response_model` + `status_code=201`; list returns JSON array; 404 via HTTPException (taste of 1.5). Proved response_model filters out undeclared fields (password_hash demo).                                                 |
+| 2026-07-06 | 1.3 Dependency Injection     | Done. Added `pagination_params` + `get_document_or_404` deps via `Annotated[T, Depends(fn)]`; refactored GET endpoints. Learned: deps are functions, their params resolved by three-door rule + hoisted to OpenAPI, can raise, sub-deps, testability via override.                                        |
+| 2026-07-07 | 1.4 Routers & structure      | Done. Moved document endpoints + deps + store into `app/api/documents.py` (`APIRouter`, prefix `/documents`, tag); `main.py` now thin assembler w/ `include_router`. Hit real bug (`word_Count` typo) that lint missed → lesson: green lint ≠ working; test behavior.                                     |
+| 2026-07-07 | 1.5 Error handling           | Done. Added `app/core/exceptions.py` (`CortexError`/`DocumentNotFoundError`), registered `@app.exception_handler` in main.py, dependency now raises domain error (HTTP-agnostic). Learned status codes (401 vs 403 etc.), custom exception classes (`self.x`/`super().__init__`), automatic 422.          |
+| 2026-07-08 | 1.6 Complete CRUD (finale)   | Done. Added `DocumentUpdate` schema + `PUT`/`DELETE` endpoints reusing `get_document_or_404`; `model_copy(update=...)`, 204 for delete. Full CRUD lifecycle verified end-to-end. Wrong `response_model` (`DocumentUpdate`) silently stripped fields → reinforced 1.2 filter lesson. **Phase 1 COMPLETE.** |
 
-*(We'll tick boxes above and add rows here as we go.)*
+| 2026-07-08 | 2.1 Async SQLAlchemy setup | Done. Postgres 16 via Docker (`docker-compose.yml`), installed `sqlalchemy[asyncio]`+`asyncpg` (added to requirements.txt). Wrote `app/core/database.py` (engine, `async_sessionmaker`, `Base`, `get_db` yield dep). Verified live async connection (`SELECT version()`). Learned engine-vs-session lifecycle, import-time vs call-time. |
+
+| 2026-07-08 | 2.2 ORM model (Document) | Done. Wrote `app/models/document.py` (`Document` model: `Mapped`/`mapped_column`, `String(200)`/`Text`/`ARRAY(String)`, `default` vs `server_default`, `DateTime(timezone=True)`, SERIAL PK). Printed generated `CREATE TABLE` DDL; confirmed no tables in DB yet (Alembic next). Learned `Mapped` nullability, defaults distinction, psql inspection. |
+
+| 2026-07-08 | 2.3 Alembic migrations | Done. Installed alembic, `alembic init -t async`, wired `env.py` (Base.metadata, import models, DATABASE_URL). Autogenerated + `upgrade head` → `documents` table created in Postgres (verified via psql `\d documents`). Learned two-phase revision-vs-upgrade, revision chain, model-import gotcha, `alembic_version`, SERIAL/nextval. |
+
+| 2026-07-11 | 2.4 Repository + wire to DB | Done. Created `app/repositories/document.py` (add/commit/refresh/get/select/delete), rewrote `app/api/documents.py` to use `get_db` + repo (deleted `_documents` dict & `_next_id`), added `ConfigDict(from_attributes=True)`. Full CRUD now persists to Postgres (verified row in psql). Learned session API, unit-of-work update, per-request session caching (shared session for sub-deps). Bugs found: `async_session_maker` missing `()`; `is_publsihed` typo in response schema (always returns false until fixed). |
+
+| 2026-07-11 | 2.5 Transactions & unit-of-work | Done. Concept-heavy: transactions/atomicity/ACID, commit vs rollback, provisional-until-commit (flush at commit), session=unit-of-work (new/dirty/deleted), per-request transaction boundary in `get_db`. Proved atomicity with `scratch_tx.py` (error before commit → not persisted; two adds → one batched INSERT + commit). |
+
+_(We'll tick boxes above and add rows here as we go.)_

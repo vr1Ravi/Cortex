@@ -184,3 +184,120 @@ the docstring becomes the description.
 **A:** (1) A guarantee the document exists (fetch) + consistent 404 handling, with zero
 duplication (DRY). (2) DELETE has nothing to return (resource gone) → 204 empty body;
 PUT succeeds AND returns the updated resource → 200.
+
+---
+
+## 2.1 — Async SQLAlchemy setup
+
+**Gotcha:** ORM = work with Python objects, SQLAlchemy translates to SQL. Three pieces:
+**engine** (connection pool, created ONCE app-wide, connects lazily on first query),
+**session** (unit-of-work, created fresh PER REQUEST, commit/rollback), **async driver**
+(`asyncpg` + `create_async_engine`) so DB waits yield to the event loop (Phase 0). URL:
+`postgresql+asyncpg://user:pass@host:port/db`. `async_sessionmaker(engine,
+expire_on_commit=False)` (False so objects stay readable after commit → for responses).
+`get_db` is a **yield dependency**: `async with session_maker() as s: yield s` → setup,
+hand to endpoint, guaranteed close. `echo=True` logs generated SQL (great for learning).
+`pip install` puts packages in `.venv`; must also add to `requirements.txt` or the venv
+& source-of-truth drift. Module top-level code runs once at import; `def` body runs per call.
+
+**❓ Q:** (1) Why `asyncpg` + async engine instead of a sync driver? (2) What's created
+once app-wide vs fresh per request?
+
+**A:** (1) A DB query is I/O (waiting); a sync driver blocks the event loop and freezes
+the whole server (Phase 0). Async driver lets the wait yield so other requests flow.
+(2) Engine + connection pool = once, app-wide; session = fresh per request (via `get_db`).
+
+---
+
+## 2.2 — ORM model (the Document table)
+
+**Gotcha:** A model class = a DB table (`__tablename__`), each attr = a column. SQLAlchemy
+2.0 style: `name: Mapped[type] = mapped_column(...)`. `Mapped[X]` marks it as a column,
+carries the Python type (autocomplete/type-check) AND nullability (`Mapped[str]`=NOT NULL,
+`Mapped[str | None]`=nullable). Simple types (int/bool/str) are inferred; a **list needs an
+explicit type** → `ARRAY(String)` (Postgres-only). Always use `DateTime(timezone=True)` for
+timestamps (else timezone-naive). `func.X()` = call SQL function X (general, not just dates).
+**`default=` (Python-side, SQLAlchemy fills before INSERT, NOT in table DDL) vs
+`server_default=` (DB-side, becomes `DEFAULT ...` in the table, DB fills it).** `primary_key=True`
+on an int → Postgres `SERIAL` auto-increments (replaces the `_next_id` hack). Inspect DB:
+`docker exec -it cortex-postgres psql -U cortex -d cortex` then `\dt`, `\d documents`.
+Defining a model ≠ creating the table (that's Alembic, 2.3).
+
+**❓ Q:** Both `word_count` (`default=0`) and `created_at` (`server_default=func.now()`)
+have a default, but only one appears as `DEFAULT ...` in `CREATE TABLE`. Which, and why?
+
+**A:** Only `created_at`. `server_default` is a DB-side default baked into the table DDL
+(Postgres applies it). `default=0` is Python-side — SQLAlchemy fills it before the INSERT,
+so it never reaches the table definition. Matters when a non-app writer inserts rows:
+`server_default` still applies, `default` doesn't. Use `server_default` for DB-owned values
+(timestamps); `default` for plain app values.
+
+---
+
+## 2.3 — Alembic migrations
+
+**Gotcha:** Migrations = version control for the DB schema (like git commits for tables).
+Two-phase: **`alembic revision --autogenerate -m "..."`** WRITES a migration file (compares
+models vs DB, generates the diff — DB untouched) → review it → **`alembic upgrade head`**
+EXECUTES pending migrations against the DB (runs `upgrade()`, actually creates/alters).
+Each migration has `upgrade()`/`downgrade()` + a revision chain (`down_revision`). Setup:
+`alembic init -t async alembic` (async template!), then in `env.py`: import `Base`,
+**import your models** (side effect: registers them on `Base.metadata`), `target_metadata =
+Base.metadata`, `config.set_main_option("sqlalchemy.url", DATABASE_URL)`. `alembic_version`
+table tracks the applied revision. `SERIAL`/`nextval(seq)` = the auto-increment PK. Inspect
+with psql `\dt` / `\d documents`. Autogenerate needs DB at head before making a new revision.
+
+**❓ Q:** (1) `alembic revision --autogenerate` vs `alembic upgrade head`? (2) Why import
+models in `env.py`?
+
+**A:** (1) `revision --autogenerate` writes the migration FILE (the diff/plan; DB unchanged);
+`upgrade head` RUNS the file(s) against the DB (creates/alters tables). (2) Models attach to
+`Base.metadata` only when imported; without the import, `target_metadata` is empty and
+autogenerate silently produces an empty migration (thinks no tables are needed).
+
+---
+
+## 2.4 — Repository pattern & wiring endpoints to the DB
+
+**Gotcha:** Session API: `session.add(obj)` (stage insert) → `await session.commit()` (write)
+→ `await session.refresh(obj)` (reload → get DB-generated `id`/`created_at`; commit also
+expires attrs). `await session.get(Model, pk)` (fetch by PK or None); `select(Model)` +
+`session.execute(...)` + `.scalars().all()` (query); `session.delete(obj)`. **Update = mutate
+the attached ORM object's attrs then `commit()`** (no `add` — unit-of-work tracks changes).
+**Repository pattern**: all DB access in `app/repositories/`, endpoints just orchestrate.
+`ConfigDict(from_attributes=True)` on the response schema lets Pydantic read ORM object
+attributes (else it only reads dicts → conversion breaks). Session injected by FastAPI via
+`Annotated[AsyncSession, Depends(get_db)]`; **cached once per request** so `get_document_or_404`
+and the endpoint share ONE session (needed for PUT/DELETE to commit the fetched object).
+PUT = full replace → must send full body (partial = PATCH w/ `exclude_unset=True`).
+
+**❓ Q:** (1) Why `session.refresh(doc)` after `commit()` in `create()`? (2) What breaks
+without `from_attributes=True` on `DocumentResponse`?
+
+**A:** (1) `id` (SERIAL) and `created_at` (server_default) are generated by Postgres during
+INSERT; the Python object doesn't know them until reloaded. `refresh()` re-fetches them
+(commit also expires attrs). (2) Pydantic can only read dicts by default; without
+`from_attributes` it can't extract fields from an ORM object → returning the ORM object errors.
+
+---
+
+## 2.5 — Transactions, sessions & unit-of-work
+
+**Gotcha:** A **transaction** = a group of DB ops that all succeed or all fail (**atomicity**,
+the "A" in ACID: Atomicity/Consistency/Isolation/Durability). `commit()` = make permanent &
+visible; `rollback()` = discard everything since BEGIN. Changes are **provisional until commit**
+— the `INSERT`/`UPDATE` SQL is only emitted at commit (the *flush*), so an error before commit
+means the DB never even saw it. The **session = unit of work**: tracks New (`add`→INSERT),
+Dirty (mutated attached objs→UPDATE), Deleted (`delete`→DELETE) and flushes them together in
+one transaction. That's why `update()` needs no `add()` — mutating a tracked object marks it
+dirty. `get_db`'s `async with ... session` defines the per-request transaction boundary:
+success→your commit persists; error before commit→session closes→rolled back (no partial writes).
+`session.scalar(select(...))` returns one value. `func.count()` → SQL `COUNT()`.
+
+**❓ Q:** (1) In `update()`, no `session.add()` — how does SQLAlchemy know to emit an UPDATE?
+(2) Exception after `add()` but before `commit()` — is the row in the DB? Why?
+
+**A:** (1) Mutating an *attached* object marks it **dirty**; the unit-of-work sees the dirty
+object at `commit()` and emits the UPDATE. (2) No — every session runs in a transaction;
+without `commit()` the changes are provisional and roll back when the session closes on error
+(the INSERT is never even flushed).

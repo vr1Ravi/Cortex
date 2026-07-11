@@ -13,5 +13,4 @@ class DocumentNotFoundError(CortexError):
 
     def __init__(self, doc_id: int) -> None:
         self.doc_id = doc_id
-        super().__init__(f"Documnet {doc_id} not found")
-
+        super().__init__(f"Document {doc_id} not found")
