@@ -18,7 +18,7 @@ if config.config_file_name is not None:
 
 # --- Cortex wiring for autogenerate ---
 from app.core.database import DATABASE_URL, Base
-from app.models.document import Document  # noqa: F401  (import so it registers on Base.metadata)
+from app.models import Document, User  # noqa: F401  (registers both on Base.metadata)
 
 # Use our app's DB URL (single source of truth lives in app/core/database.py)
 config.set_main_option("sqlalchemy.url", DATABASE_URL)

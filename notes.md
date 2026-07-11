@@ -301,3 +301,91 @@ success→your commit persists; error before commit→session closes→rolled ba
 object at `commit()` and emits the UPDATE. (2) No — every session runs in a transaction;
 without `commit()` the changes are provisional and roll back when the session closes on error
 (the INSERT is never even flushed).
+
+---
+
+## 2.6 — Relationships (one-to-many)
+
+**Gotcha:** One-to-many needs two pieces: **FK column** (`owner_id: Mapped[int|None] =
+mapped_column(ForeignKey("users.id"), index=True)`) — the *stored* link, enforced by the DB —
+and **`relationship()`** — Python-only navigation, NOT a stored column. `owner` (on Document,
+the "many" side) fetches the one User at access time via owner_id; `documents` (on User, the
+"one" side) is the list of that user's docs. `back_populates="..."` on both ends keeps them in
+sync. **The FK lives on the "many" side.** Only `owner_id` is stored; `owner` is derived (this
+is what causes N+1 — next session). Made `owner_id` **nullable** because existing doc rows have
+no owner → a NOT NULL column would fail the migration (tighten in Phase 3 w/ auth).
+Cross-file relationships → circular import: guard the type-only import with `if TYPE_CHECKING:`
+(False at runtime, so skipped) + string annotation `Mapped["User"]` (SQLAlchemy resolves later
+from its registry). Register BOTH models in `app/models/__init__.py` so the registry + Alembic
+see them. Runtime vs static: Python runs `import`/`class` line-by-line AT RUNTIME; type hints
+are for static checkers only (ignored at runtime), so a TYPE_CHECKING import never executes.
+`email` unique+index (login lookups); index only columns you query by (indexes cost write speed+storage).
+
+**❓ Q:** (1) `owner_id` column vs the `owner`/`documents` relationship attributes? (2) Why is
+`owner_id` nullable for now?
+
+**A:** (1) `owner_id` = stored FK column (integer → users.id, enforced by DB). `owner`/`documents`
+are `relationship()` attributes — not stored; navigable in Python, fetched at query time. `owner`
+(on Document) → the one User; `documents` (on User) → many Documents. FK lives on the many side.
+(2) Existing document rows have no owner_id; adding a NOT NULL column fails on that existing data
+→ nullable now, NOT NULL in Phase 3 once auth sets the owner.
+
+**Doubts cleared this session:**
+
+- **Runtime vs compile/static time (Python):** Python has only a tiny compile step (syntax →
+  bytecode; no name/type checks). `import`, `def`, `class` are **executable statements that run
+  at RUNTIME**, top-to-bottom. Type hints are ignored at runtime — they exist only for **static
+  checkers** (mypy/IDE), a separate optional step *before* running. Three moments: bytecode-compile
+  (syntax only) → static type-check (reads hints, optional) → runtime (imports run, hints ignored).
+
+- **Why circular imports crash (single-threaded!):** nothing loads "in parallel." Imports run
+  sequentially, but Python caches a **half-initialized** module in `sys.modules` the moment it
+  starts loading. If A (mid-load) imports B, and B imports A, Python returns the *half-done* A —
+  the class isn't defined yet → `ImportError`. It's re-entrancy, not threads.
+
+- **How `if TYPE_CHECKING:` fixes it:** `TYPE_CHECKING` is `False` at runtime, so the block is
+  skipped like `if False:` — the import **never executes**, so no jump to the other file, no
+  circle. The annotation is a **string** (`Mapped["User"]`), so runtime never needs the import;
+  SQLAlchemy resolves the name later from its registry. Escape hatches for circular imports:
+  (1) `TYPE_CHECKING` for type-only imports, (2) import inside a function, (3) move shared code
+  to a 3rd module.
+
+- **Indexes — why only some columns:** an index speeds up reads on that column but **slows writes**
+  (every insert/update maintains it) and **costs storage**. So index only columns you search/join
+  by: `id` (PK, auto), `email` (login lookups), `owner_id` (FK, "docs for this user"). Not
+  `title`/`content` (never looked up by them). Composite indexes (multi-column) exist too.
+
+- **Do we store both `owner` and `owner_id`? NO.** Only `owner_id` is a real DB column. `owner`
+  is a `relationship()` — not stored; accessing `doc.owner` runs a query (`SELECT user WHERE
+  id=owner_id`) at that moment. `owner` is *derived* from `owner_id`. (This lazy "query on access"
+  is what causes N+1.)
+
+- **"many side" vs attribute direction (comment clarification):** two different labels — the
+  MODEL: `User`=one side, `Document`=many side (**FK lives on the many side**); the ATTRIBUTE:
+  `owner` points to the ONE user (to-one), `documents` points to MANY docs (to-many). Both true,
+  different levels.
+
+---
+
+## 2.7 — N+1 problem & eager loading (Phase 2 finale)
+
+**Gotcha:** **N+1** = 1 query for the list + **N** extra queries (one per item) to lazily load
+each item's related object (`d.owner` in a loop). Scales with the number of **distinct** related
+rows → melts the DB at scale. **Lazy** loading = fetch related on access (one-at-a-time). **Eager**
+loading = fetch related up front in bulk. Fix: `select(Document).options(selectinload(Document.owner))`
+→ 2 queries flat: (1) `SELECT documents`, (2) `SELECT users WHERE id IN (<owner_ids>)`. The
+`owner_id`s ride along free as a column on the loaded docs; selectinload reads them from memory,
+dedupes, fires ONE `IN` query, matches owners back. **`joinedload` for to-one (single JOIN),
+`selectinload` for to-many (second IN query)** — rule of thumb. Async bonus: touching an
+un-loaded relationship raises `MissingGreenlet` (no implicit lazy IO) → forces explicit eager
+loading. **Identity map**: session caches loaded objects by PK, so repeated lookups of the same
+id within a session don't re-query (why the demo was 1+3=4, not 1+9). FK index makes the `IN`/join fast.
+
+**❓ Q:** (1) What is N+1 in one sentence? (2) How does `selectinload(Document.owner)` cut it to
+2 queries — what's the 2nd query? (3) Why did the naive demo fire 4 queries, not 10?
+
+**A:** (1) 1 query for the list + N extra queries (one per item) to load each item's related
+object. (2) It eager-loads: after `SELECT documents`, it reads the owner_ids from the loaded docs
+and fires ONE `SELECT * FROM users WHERE id IN (...)`, matching owners back in memory → 2 total.
+(3) The session **identity map** cached each User by PK; 9 docs had only 3 distinct owners, so
+only 3 owner-queries ran (1 + 3 = 4).

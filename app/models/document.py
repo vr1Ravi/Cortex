@@ -4,15 +4,17 @@ This is a *model* (DB shape), distinct from the Pydantic *schemas* in
 app/schemas/document.py (API shapes). Same domain, different jobs.
 """
 
-
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
+if TYPE_CHECKING:
+    from app.models.user import User
 
 class Document(Base):
     __tablename__ = "documents"
@@ -26,3 +28,7 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    # foreign key + relationship (the "many" side)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    owner: Mapped["User | None"] = relationship(back_populates="documents")

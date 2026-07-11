@@ -30,6 +30,7 @@
 | 0     | Foundations (async, typing, tooling)               |    3     |   6    |
 | 1     | FastAPI core (Pydantic, DI, routers)               |    6     |   12   |
 | 2     | Data & persistence (async SQLAlchemy, Alembic)     |    6     |   12   |
+| 2+    | (Phase 2 ran 7 sessions — relationships & perf split) |   +1     |   +2   |
 | 3     | Advanced backend (auth, Celery, Redis, WebSockets) |    8     |   16   |
 | 4     | LLM integration (Claude API, streaming, tools)     |    5     |   10   |
 | 5     | RAG + LangChain (embeddings, pgvector, agents)     |    8     |   16   |
@@ -62,7 +63,8 @@
 - [x] **2.3** **Alembic** migrations — autogenerate, upgrade/downgrade, workflow _(DONE)_
 - [x] **2.4** Repository pattern & CRUD wired into DI _(DONE)_
 - [x] **2.5** Transactions, session lifecycle, unit-of-work _(DONE)_
-- [ ] **2.6** Performance: N+1 problem, eager loading, indexing
+- [x] **2.6** Relationships — `User` model, FK + one-to-many (`relationship`, `back_populates`) _(DONE)_
+- [x] **2.7** Performance: N+1 problem, eager loading, indexing (Phase 2 finale) _(DONE)_
 
 ### Phase 3 — Advanced Backend · 8 sessions
 
@@ -155,5 +157,9 @@
 | 2026-07-11 | 2.4 Repository + wire to DB | Done. Created `app/repositories/document.py` (add/commit/refresh/get/select/delete), rewrote `app/api/documents.py` to use `get_db` + repo (deleted `_documents` dict & `_next_id`), added `ConfigDict(from_attributes=True)`. Full CRUD now persists to Postgres (verified row in psql). Learned session API, unit-of-work update, per-request session caching (shared session for sub-deps). Bugs found: `async_session_maker` missing `()`; `is_publsihed` typo in response schema (always returns false until fixed). |
 
 | 2026-07-11 | 2.5 Transactions & unit-of-work | Done. Concept-heavy: transactions/atomicity/ACID, commit vs rollback, provisional-until-commit (flush at commit), session=unit-of-work (new/dirty/deleted), per-request transaction boundary in `get_db`. Proved atomicity with `scratch_tx.py` (error before commit → not persisted; two adds → one batched INSERT + commit). |
+
+| 2026-07-11 | 2.6 Relationships (one-to-many) | Done. Added `app/models/user.py` (User: email unique+index, hashed_password); added `owner_id` nullable FK + `owner`/`documents` relationships (`back_populates`); `app/models/__init__.py` registers both; env.py imports package. Migration `d7eba3eb9aa5` → `users` table + FK + indexes (verified psql). Deep-dived: FK vs relationship, circular imports + `TYPE_CHECKING`, runtime vs static/compile time, indexing trade-offs. |
+
+| 2026-07-11 | 2.7 N+1 & eager loading | Done. Demoed N+1 with seeded users/docs + query counter: naive lazy loading scales with distinct related rows, `selectinload(Document.owner)` = flat 2 queries (`... WHERE id IN (owner_ids)`). Learned lazy vs eager, `selectinload` (to-many) vs `joinedload` (to-one), identity map (naive was 1+3=4 not 10), async forbids implicit lazy load (`MissingGreenlet`). **PHASE 2 COMPLETE.** |
 
 _(We'll tick boxes above and add rows here as we go.)_

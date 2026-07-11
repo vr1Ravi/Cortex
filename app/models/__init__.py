@@ -1,0 +1,6 @@
+"""Import all models here so SQLAlchemy's registry + Alembic autogenerate see them."""
+
+from app.models.document import Document
+from app.models.user import User
+
+__all__ = ["Document", "User"]
