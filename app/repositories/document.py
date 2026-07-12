@@ -12,10 +12,11 @@ from app.models.document import Document
 from app.schemas.document import DocumentCreate, DocumentUpdate
 
 
-async def create(session: AsyncSession, data: DocumentCreate) -> Document:
+async def create(session: AsyncSession, data: DocumentCreate, owner_id: int) -> Document:
     doc = Document(
         **data.model_dump(), # title, content, tags
-        word_count=len(data.content.split())  # server-computed
+        word_count=len(data.content.split()),  # server-computed
+        owner_id=owner_id
     )
     session.add(doc)            # stage the INSERT
     await session.commit()      # write to DB
@@ -27,9 +28,18 @@ async def get_by_id(session: AsyncSession, doc_id: int) -> Document | None:
     return await session.get(Document, doc_id)  # fetch by primary key, or None
 
 
-async def list_all(session: AsyncSession, skip: int, limit: int) -> Sequence[Document]:
+async def list_all(
+        session: AsyncSession,
+        owner_id: int, 
+        skip: int, 
+        limit: int
+        ) -> Sequence[Document]:
     result = await session.execute(
-        select(Document).order_by(Document.id).offset(skip).limit(limit)
+        select(Document)
+        .where(Document.owner_id == owner_id)
+        .order_by(Document.id)
+        .offset(skip)
+        .limit(limit)
     )
     return result.scalars().all() # list of Document objects
 

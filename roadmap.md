@@ -69,8 +69,8 @@
 ### Phase 3 — Advanced Backend · 8 sessions
 
 - [x] **3.1** Auth I — password hashing + user registration _(DONE)_ (JWT moved to 3.2)
-- [ ] **3.2** Auth II — OAuth2 password flow, `get_current_user` dependency
-- [ ] **3.3** Role-based access control (RBAC) & scopes
+- [x] **3.2** Auth II — JWT, OAuth2 login, `get_current_user` dependency _(DONE)_
+- [x] **3.3** RBAC (roles) + document ownership (owner-only access, 403 vs 404) _(DONE)_
 - [ ] **3.4** Middleware deep-dive, CORS, request context
 - [ ] **3.5** Background tasks vs **Celery** workers + Redis broker
 - [ ] **3.6** **Redis** caching & rate limiting
@@ -163,5 +163,9 @@
 | 2026-07-11 | 2.7 N+1 & eager loading | Done. Demoed N+1 with seeded users/docs + query counter: naive lazy loading scales with distinct related rows, `selectinload(Document.owner)` = flat 2 queries (`... WHERE id IN (owner_ids)`). Learned lazy vs eager, `selectinload` (to-many) vs `joinedload` (to-one), identity map (naive was 1+3=4 not 10), async forbids implicit lazy load (`MissingGreenlet`). **PHASE 2 COMPLETE.** |
 
 | 2026-07-11 | 3.1 Password hashing + registration | Done. Installed `pwdlib[argon2]` + `pydantic[email]`. `app/core/security.py` (`hash_password`/`verify_password`, Argon2). `app/schemas/user.py` (`UserCreate` EmailStr+password, `UserResponse` no password). `app/repositories/user.py` (`get_by_email`, `create` hashes before store). `EmailAlreadyExistsError`→409 handler. `POST /users` register endpoint. Verified: 201, no hash leak, 409 dup, 422 validation. Learned hashing vs encryption, salt, slow algo, verify() reuses embedded salt. |
+
+| 2026-07-12 | 3.2 JWT & login | Done. Installed `pyjwt`. JWT funcs in security.py (`create_access_token`/`decode_access_token`, HS256, 30min). `Token` schema, `app/api/auth.py` `POST /auth/login` (`OAuth2PasswordRequestForm`, verify_password, same 401 for both fail cases). `app/api/deps.py` (`oauth2_scheme`, `get_current_user`, `CurrentUser`), `user_repo.get_by_id`, protected `GET /users/me`. Full flow verified via curl. Deep dives: signed-not-encrypted, SECRET_KEY vs SIGNATURE, encoding vs encryption, real AES token (`Salted__`). Bugs: `response_class`→`response_model`, `tokenUrl="auth/logi"` typo (Swagger-only). |
+
+| 2026-07-12 | 3.3 RBAC & ownership | Done. Added `role` to User (server_default "user") + migration. `require_admin`/`AdminUser` (composes get_current_user) + admin-only `GET /users` (`user_repo.list_all`). Documents scoped to owner: `owner_id=current_user.id` on create, list filters by owner, `get_owned_document_or_404` (404 missing / 403 not-yours); all doc routes require auth. Bootstrapped admin via SQL. Truncated all data (RESTART IDENTITY CASCADE). Verified full authz matrix (401/403/404, cross-user isolation) via curl. |
 
 _(We'll tick boxes above and add rows here as we go.)_

@@ -7,7 +7,7 @@ Run the dev server from the project root:
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api import documents, users
+from app.api import auth, documents, users
 from app.core.exceptions import DocumentNotFoundError, EmailAlreadyExistsError
 
 app = FastAPI(
@@ -18,6 +18,8 @@ app = FastAPI(
 
 app.include_router(documents.router)
 app.include_router(users.router)
+app.include_router(auth.router)
+
 
 
 @app.exception_handler(DocumentNotFoundError)

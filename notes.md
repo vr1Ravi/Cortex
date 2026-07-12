@@ -436,3 +436,86 @@ through it, and it doesn't declare `hashed_password`, so that field is dropped o
 
 Argon2 (via pwdlib) applies BOTH fixes automatically: generates a random salt + runs the slow
 memory-hard algorithm, packing algo+params+salt+hash into one self-describing string.
+
+---
+
+## 3.2 — JWT & login
+
+**Gotcha:** HTTP is stateless → after login, prove identity each request with a **token**. **JWT**
+= `header.payload.signature` (dot-separated base64). **Signed, NOT encrypted** — anyone can
+base64-decode & READ the payload (never put secrets in it); the signature only proves it's
+authentic + untampered. **SECRET_KEY** (server-only, never in token) signs & verifies the
+**SIGNATURE** (in the token, public). Reading needs no key (base64 = encoding, not encryption);
+**forging** needs the secret → that's the real protection (threat = forgery/impersonation, not
+reading). Flow: `POST /auth/login` (form data via `OAuth2PasswordRequestForm`; field is `username`
+but holds email) → `verify_password` → `create_access_token` (sub=user id, exp) → returns
+`{access_token, token_type}`. Same 401 for "no user" and "wrong password" (no email-enumeration
+leak). `get_current_user` dependency: `OAuth2PasswordBearer` extracts Bearer token → `jwt.decode`
+(verifies sig+expiry) → load user; any failure → 401. `CurrentUser = Annotated[User,
+Depends(get_current_user)]` → add to any endpoint to require login. `tokenUrl` is ONLY a Swagger
+hint (where its Authorize button posts) — not used in real verification. `response_model` (Pydantic
+shape) ≠ `response_class` (Response type like JSONResponse). Not-a-JWT tokens: `eyJ...` = JWT;
+`U2FsdGVkX18` (=`Salted__`) = AES-encrypted (JWE/custom), unreadable without key.
+
+**❓ Q:** (1) Why can Cortex be stateless yet know who you are each request? (2) Three failure
+cases in `get_current_user` that all → 401? (3) Why does it being a dependency make protecting
+any endpoint trivial?
+
+**A:** (1) The token travels with each request; server verifies its signature + reads the user id
+from it → nothing stored server-side. (2) i. `decode` raises (bad/expired/tampered/malformed sig),
+ii. token decodes but has no `sub`, iii. token valid but user not in DB (deleted). All → vague 401.
+(3) It's a dependency, so protecting an endpoint = adding one param (`current_user: CurrentUser`);
+auth logic written once, reused everywhere, composable (e.g. `require_admin` builds on it),
+overridable in tests — and it also hands you the authenticated user.
+
+**Doubts cleared this session:**
+
+- **How can I read a JWT payload with no secret?** Because reading = **base64 *decoding*, not decryption.**
+  base64 is just a reversible text encoding (for safe transport), no key involved. The JWT payload
+  is plain base64-encoded JSON — never hidden. Only the *signature* involves the secret.
+
+- **SECRET_KEY vs SIGNATURE:** SECRET_KEY = secret string, **server-only, never in the token**, used
+  to create & verify signatures. SIGNATURE = 3rd part of the JWT, **in the token, public**, computed
+  as `HMAC(header+payload, SECRET_KEY)`. You can *see* the signature but can't *reproduce* it without
+  the secret.
+
+- **If anyone can decode a JWT, what's the point of the secret?** The point isn't secrecy — it's
+  **unforgeability.** Threat = someone sending `sub:1` to impersonate the admin, NOT someone reading
+  their own `sub:4`. Without a signature, anyone could fabricate `{"sub":"1"}` and the server couldn't
+  tell. The signature (made with the secret) lets the server verify "did I actually issue this exact
+  token, unchanged?" Change the payload → signature no longer matches → rejected. Hide the secret
+  because if it leaks, attackers can mint valid tokens for any user. **JWT = unforgeable ID badge,
+  not secret message** (like a banknote: readable, but you can't print your own).
+
+- **Why couldn't I decode a real token from another site?** It started with `U2FsdGVkX18` (= `Salted__`)
+  → it's **AES-encrypted** (CryptoJS/OpenSSL), not a JWT. A JWT starts with `eyJ` (= `{"`) and has 2
+  dots (`header.payload.signature`). That site *encrypted* its token (contents hidden, needs key),
+  vs a signed JWT (readable). Sign = integrity only; encrypt (JWE/AES) = also confidential. Not every
+  "token" is a JWT.
+
+---
+
+## 3.3 — Roles (RBAC) & document ownership
+
+**Gotcha:** Authentication (who are you → 401) vs Authorization (allowed? → 403). Two authz kinds:
+**RBAC** (role gate) + **ownership** (own-your-resource). Added `role` to User
+(`String(20), default="user", server_default="user"` — server_default backfills existing rows so
+the NOT NULL migration doesn't fail). **Dependency composition**: `require_admin` depends on
+`get_current_user` → runs authenticate FIRST (401), then role check (403); reuses all token logic.
+`AdminUser`/`CurrentUser` aliases → gate any route with one param. Ownership: stamp
+`owner_id=current_user.id` on create; `list` filters to `owner_id==current_user.id`;
+`get_owned_document_or_404` = **404 if missing, 403 if exists-but-not-yours** (composes get_current_user
+too). Bootstrapping the first admin: do it via direct SQL (`UPDATE users SET role='admin'...`) — a
+public promote endpoint = privilege escalation; admin-granting must be admin-only → chicken-and-egg
+for the first one. `TRUNCATE t1, t2 RESTART IDENTITY CASCADE` wipes data + resets id sequences (CASCADE
+needed for FK; leave alembic_version alone).
+
+**❓ Q:** (1) Advantage of `require_admin` composing `get_current_user`, and the 401-then-403 order?
+(2) Why 404 in one case and 403 in another in `get_owned_document_or_404`? (3) Why grant admin via
+SQL, not an endpoint?
+
+**A:** (1) Token logic is written once in `get_current_user` and reused (no rewriting/re-handling
+errors); the chain runs authenticate first → 401 if that fails, then the role check → 403. (2) 404 =
+document doesn't exist; 403 = it exists but you don't own it (different questions, different codes).
+(3) A public make-admin endpoint lets anyone self-promote; admin-granting must be admin-only, which
+can't grant the FIRST admin (chicken-and-egg) → bootstrap directly in the DB.
