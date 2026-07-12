@@ -50,3 +50,7 @@ What ruff is: a linter (finds bugs/bad patterns) and formatter (auto-styles code
 * A transaction is a group of database operations that all succeed or all fail — together. It's "all-or-nothing." In SQL:
 * That "all-or-nothing" guarantee is Atomicity — the "A" in ACID (the four guarantees databases give: Atomicity, Consistency, Isolation, Durability). Atomicity is the one you'll reason about daily.
 * func is SQLAlchemy's gateway to any SQL function? func.count() generates the SQL COUNT() aggregate, which counts rows.
+* Encryption is two-way: encrypt → ciphertext → decrypt back to the original. Reversible (with the key).
+* Hashing is one-way: hash("hunter2") → a fixed string, and there's no way to reverse it back to "hunter2".
+* Passwords use hashing, precisely because it's irreversible — even you (the developer) can't recover a user's password. So how do you check a login? You hash the password they typed and compare it to the stored hash:
+* You never un-hash anything. You only ever compare hashes.

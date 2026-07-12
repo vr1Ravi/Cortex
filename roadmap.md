@@ -68,7 +68,7 @@
 
 ### Phase 3 — Advanced Backend · 8 sessions
 
-- [ ] **3.1** Auth I — password hashing, JWT creation/verification
+- [x] **3.1** Auth I — password hashing + user registration _(DONE)_ (JWT moved to 3.2)
 - [ ] **3.2** Auth II — OAuth2 password flow, `get_current_user` dependency
 - [ ] **3.3** Role-based access control (RBAC) & scopes
 - [ ] **3.4** Middleware deep-dive, CORS, request context
@@ -161,5 +161,7 @@
 | 2026-07-11 | 2.6 Relationships (one-to-many) | Done. Added `app/models/user.py` (User: email unique+index, hashed_password); added `owner_id` nullable FK + `owner`/`documents` relationships (`back_populates`); `app/models/__init__.py` registers both; env.py imports package. Migration `d7eba3eb9aa5` → `users` table + FK + indexes (verified psql). Deep-dived: FK vs relationship, circular imports + `TYPE_CHECKING`, runtime vs static/compile time, indexing trade-offs. |
 
 | 2026-07-11 | 2.7 N+1 & eager loading | Done. Demoed N+1 with seeded users/docs + query counter: naive lazy loading scales with distinct related rows, `selectinload(Document.owner)` = flat 2 queries (`... WHERE id IN (owner_ids)`). Learned lazy vs eager, `selectinload` (to-many) vs `joinedload` (to-one), identity map (naive was 1+3=4 not 10), async forbids implicit lazy load (`MissingGreenlet`). **PHASE 2 COMPLETE.** |
+
+| 2026-07-11 | 3.1 Password hashing + registration | Done. Installed `pwdlib[argon2]` + `pydantic[email]`. `app/core/security.py` (`hash_password`/`verify_password`, Argon2). `app/schemas/user.py` (`UserCreate` EmailStr+password, `UserResponse` no password). `app/repositories/user.py` (`get_by_email`, `create` hashes before store). `EmailAlreadyExistsError`→409 handler. `POST /users` register endpoint. Verified: 201, no hash leak, 409 dup, 422 validation. Learned hashing vs encryption, salt, slow algo, verify() reuses embedded salt. |
 
 _(We'll tick boxes above and add rows here as we go.)_

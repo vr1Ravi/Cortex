@@ -14,3 +14,10 @@ class DocumentNotFoundError(CortexError):
     def __init__(self, doc_id: int) -> None:
         self.doc_id = doc_id
         super().__init__(f"Document {doc_id} not found")
+
+class EmailAlreadyExistsError(CortexError):
+    """Raised when registering with an email that's already taken."""
+
+    def __init__(self, email: str) -> None:
+        self.email = email
+        super().__init__(f"Email {email} is already registered")

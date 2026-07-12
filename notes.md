@@ -389,3 +389,50 @@ object. (2) It eager-loads: after `SELECT documents`, it reads the owner_ids fro
 and fires ONE `SELECT * FROM users WHERE id IN (...)`, matching owners back in memory → 2 total.
 (3) The session **identity map** cached each User by PK; 9 docs had only 3 distinct owners, so
 only 3 owner-queries ran (1 + 3 = 4).
+
+---
+
+## 3.1 — Password hashing & registration
+
+**Gotcha:** NEVER store plaintext passwords. Store a **hash** (one-way, irreversible) — unlike
+encryption (two-way). Login = hash the entered password and compare to stored hash; you never
+un-hash. Plain fast hashes (SHA-256) are brute-forceable + rainbow-tableable, so use: **salt**
+(random per-password value, kills rainbow tables + makes identical passwords hash differently;
+stored alongside the hash) + a **slow/memory-hard algorithm** (**Argon2**/bcrypt — ~0.1s, makes
+mass brute force impractical). `pwdlib` (`PasswordHash.recommended()` = Argon2) does salt+algo
+automatically and packs `$argon2id$...$salt$hash` into one self-describing string.
+**`verify()` doesn't re-hash & string-compare** — it extracts the salt FROM the stored hash,
+re-hashes the input with that same salt, and compares (that's why same-password hashes look
+different yet verify True). Registration: `UserCreate` (email `EmailStr`, password) → repo hashes
+before storing → `UserResponse` has NO password field (response_model allow-list = hash can't
+leak). Duplicate email → `EmailAlreadyExistsError` → 409. `scalar_one_or_none()` for at-most-one.
+No migration needed (only app code, User table already existed).
+
+**❓ Q:** (1) Same password hashed twice → 2 different strings; how does `verify()` still return
+True? (2) Why a *slow* algorithm for passwords? (3) Why can't the hash leak in the response?
+
+**A:** (1) `verify()` reads the salt embedded in the stored hash, re-hashes the input with THAT
+salt (not a fresh one), and compares → same password reproduces the stored hash. (2) Slow +
+memory-hard makes brute-forcing stolen hashes impractical (thousands/sec, not billions); ~0.1s is
+invisible to real users. (3) `response_model=UserResponse` is an allow-list — FastAPI serializes
+through it, and it doesn't declare `hashed_password`, so that field is dropped on output.
+
+**Why plain hashing (e.g. SHA-256) fails — 2 problems, 2 fixes:**
+
+- **Problem 1: too fast + rainbow tables.** Fast hashes (SHA-256) can be computed billions/sec on
+  a GPU → brute force is cheap. Also **rainbow tables** (huge precomputed hash→password lookups)
+  crack unsalted hashes instantly.
+  → **Fix A — slow, memory-hard algorithm** (Argon2/bcrypt): deliberately ~0.1s + RAM-hungry, so
+  an attacker gets thousands of guesses/sec instead of billions; rainbow tables can't be
+  precomputed against it. Invisible to a real user logging in once.
+
+- **Problem 2: identical passwords → identical hashes.** With plain hashing, two users who pick
+  `"password123"` get the *same* hash → a leak reveals who shares passwords, and cracking one
+  cracks all of them.
+  → **Fix B — salt**: a random value generated *per password*, mixed in before hashing. Now the
+  same password hashes *differently* for every user → kills rainbow tables (can't precompute for
+  every possible salt) and hides shared passwords. The salt isn't secret — it's stored right in
+  the hash string; its only job is to be **unique per password**.
+
+Argon2 (via pwdlib) applies BOTH fixes automatically: generates a random salt + runs the slow
+memory-hard algorithm, packing algo+params+salt+hash into one self-describing string.
