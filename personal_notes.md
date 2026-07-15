@@ -54,3 +54,11 @@ What ruff is: a linter (finds bugs/bad patterns) and formatter (auto-styles code
 * Hashing is one-way: hash("hunter2") → a fixed string, and there's no way to reverse it back to "hunter2".
 * Passwords use hashing, precisely because it's irreversible — even you (the developer) can't recover a user's password. So how do you check a login? You hash the password they typed and compare it to the stored hash:
 * You never un-hash anything. You only ever compare hashes.
+* Redis is an in-memory key-value data store. Break that down:
+
+Key-value — at its core, you store and fetch values by a key, like a giant dictionary:
+
+SET user:5:name "Ravi"
+GET user:5:name → "Ravi"
+In-memory — it keeps all data in RAM, not on disk. This is the headline feature.
+Data store / server — it runs as a separate server (your cortex-redis container) that apps talk to over the network.

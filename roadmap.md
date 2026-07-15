@@ -72,7 +72,7 @@
 - [x] **3.2** Auth II — JWT, OAuth2 login, `get_current_user` dependency _(DONE)_
 - [x] **3.3** RBAC (roles) + document ownership (owner-only access, 403 vs 404) _(DONE)_
 - [x] **3.4** Middleware deep-dive, CORS, request context _(DONE)_
-- [ ] **3.5** Background tasks vs **Celery** workers + Redis broker
+- [x] **3.5** Background tasks vs **Celery** workers + Redis broker _(DONE)_
 - [ ] **3.6** **Redis** caching & rate limiting
 - [ ] **3.7** **WebSockets** & **SSE** streaming responses
 - [ ] **3.8** File uploads → object storage, config/secrets (`pydantic-settings`), structured logging
@@ -169,5 +169,7 @@
 | 2026-07-12 | 3.3 RBAC & ownership | Done. Added `role` to User (server_default "user") + migration. `require_admin`/`AdminUser` (composes get_current_user) + admin-only `GET /users` (`user_repo.list_all`). Documents scoped to owner: `owner_id=current_user.id` on create, list filters by owner, `get_owned_document_or_404` (404 missing / 403 not-yours); all doc routes require auth. Bootstrapped admin via SQL. Truncated all data (RESTART IDENTITY CASCADE). Verified full authz matrix (401/403/404, cross-user isolation) via curl. |
 
 | 2026-07-13 | 3.4 Middleware & CORS | Done. Custom `@app.middleware("http")` timing middleware (X-Process-Time header on every response) + `CORSMiddleware` (allow localhost:3000). Learned middleware vs dependency, call_next pre/post, CORS is browser-enforced (curl never triggers it). Debug lesson: `curl -s` hides connection-refused (exit 7) — server was just down, code was fine. |
+
+| 2026-07-16 | 3.5 Celery + Redis | Done. Added `redis:7` to docker-compose; installed `celery[redis]`. `app/worker.py` (Celery app, redis broker+backend, `process_document` task with time.sleep to simulate heavy work). `app/api/tasks.py` (`POST /tasks/process-document` → `.delay()` → 202 + task_id; `GET /tasks/{id}` → AsyncResult status/result). Ran worker `--pool=solo`; verified full flow PENDING→SUCCESS, API returns instantly. Learned broker/backend/worker arch, `.delay()` serialization (pass ids/primitives not sessions/ORM objects), 202 Accepted. |
 
 _(We'll tick boxes above and add rows here as we go.)_

@@ -546,3 +546,30 @@ object into the endpoint → dependency (middleware can't inject values). (2) It
 the next middleware/eventually the route handler and returns the Response; before = pre-processing
 (on the way in), after = post-processing (on the way out). (3) CORS is enforced by the browser, not
 the server; curl isn't a browser, so it ignores CORS entirely.
+
+---
+
+## 3.5 — Celery + Redis (background task queue)
+
+**Gotcha:** Slow/heavy work (processing, embeddings, email, LLM calls) must NOT run in the request
+(Phase 0: blocks/slows). Offload it. Two tools: **`BackgroundTasks`** = in-process, after-response,
+light & disposable (no retries, dies with app) — for tiny fire-and-forget (email/log). **Celery** =
+distributed task queue for heavy/reliable/scalable work. Architecture: FastAPI *pushes* task →
+**broker (Redis)** holds the queue → **worker (separate process)** pulls & *runs* the code → writes
+result to **backend (Redis)**. **Redis never executes code** — it's the middleman queue + result
+store; the WORKER runs the task. `task.delay(args)` = serialize args to JSON, push to broker, return
+INSTANTLY with a task_id (doesn't wait). Poll `AsyncResult(id)` → status PENDING/STARTED/SUCCESS/
+FAILURE + result. Return **202 Accepted** for "accepted, processing async". Task args must be
+**JSON-serializable → pass ids/primitives, NOT session/ORM/connections** (can't serialize across
+processes); pattern = pass the id, task re-fetches (opens its own session). Celery tasks are plain
+sync fns; blocking (`time.sleep`) is fine there (separate process, not the event loop). Run worker:
+`celery -A app.worker worker --loglevel=info --pool=solo` (`--pool=solo` avoids macOS fork crash).
+
+**❓ Q:** (1) The task took 5s but the POST returned instantly — where did the work run, and Redis's
+role? (2) Why not pass a session/ORM object to a task; what instead? (3) BackgroundTasks vs Celery?
+
+**A:** (1) The work ran in the **Celery worker process** (separate); Redis was only the broker
+(passed the task to the worker) + backend (stored the result) — it doesn't run code. (2) Args must be
+JSON-serialized to cross to another process; sessions/ORM/connections can't serialize → pass
+ids/primitives and let the task re-fetch. (3) BackgroundTasks = light, quick, disposable, in-process;
+Celery = heavy, slow, needs retries/reliability/scale, survives restarts.

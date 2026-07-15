@@ -7,9 +7,15 @@ services:
       POSTGRES_PASSWORD: cortex
       POSTGRES_DB: cortex
     ports:
-      - "5432:5432"          # host:container — reachable at localhost:5432
+      - "5432:5432" # host:container — reachable at localhost:5432
     volumes:
-      - cortex_pgdata:/var/lib/postgresql/data   # data survives container restarts
+      - cortex_pgdata:/var/lib/postgresql/data # data survives container restarts
+
+  redis:
+    image: redis:7
+    container_name: cortex-redis
+    ports:
+      - "6379:6379"
 
 volumes:
   cortex_pgdata:
