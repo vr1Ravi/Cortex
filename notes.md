@@ -519,3 +519,30 @@ errors); the chain runs authenticate first → 401 if that fails, then the role 
 document doesn't exist; 403 = it exists but you don't own it (different questions, different codes).
 (3) A public make-admin endpoint lets anyone self-promote; admin-granting must be admin-only, which
 can't grant the FIRST admin (chicken-and-egg) → bootstrap directly in the DB.
+
+---
+
+## 3.4 — Middleware, CORS & request context
+
+**Gotcha:** **Middleware** wraps EVERY request/response (runs before routing/deps and after the
+endpoint). For cross-cutting concerns: logging, timing, headers, CORS, compression. Custom:
+`@app.middleware("http")` async fn `(request, call_next)` → code before `call_next` = pre-processing,
+`response = await call_next(request)` runs the rest of the chain (deps + endpoint), code after =
+post-processing, then `return response`. **Middleware vs dependency**: middleware = every request,
+wraps the cycle, can't inject values → use for global infra; dependency = selective, **returns a
+value into the endpoint** (session, current_user) → use for auth/DB/validation. **CORS** = browser
+same-origin policy blocks JS on origin A from calling API on origin B unless the API returns
+`Access-Control-Allow-Origin`. `CORSMiddleware(allow_origins=[...], allow_credentials, allow_methods,
+allow_headers)`. **CORS is enforced by the BROWSER, not the server** → curl/Postman never trigger it
+(that's why our curl tests never hit CORS). Non-simple requests → browser sends a preflight `OPTIONS`.
+Debug tip: with `curl -s`, connection-refused and "header missing" both print nothing → drop `-s` to
+see `curl: (7) Failed to connect` vs a real response.
+
+**❓ Q:** (1) Why is timing a good fit for middleware but auth better as a dependency? (2) What does
+`await call_next(request)` do, and what runs before vs after? (3) Why did curl tests never hit CORS?
+
+**A:** (1) Timing applies to every request → middleware; auth is selective AND must return the user
+object into the endpoint → dependency (middleware can't inject values). (2) It passes the request to
+the next middleware/eventually the route handler and returns the Response; before = pre-processing
+(on the way in), after = post-processing (on the way out). (3) CORS is enforced by the browser, not
+the server; curl isn't a browser, so it ignores CORS entirely.

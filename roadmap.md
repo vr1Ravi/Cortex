@@ -71,7 +71,7 @@
 - [x] **3.1** Auth I — password hashing + user registration _(DONE)_ (JWT moved to 3.2)
 - [x] **3.2** Auth II — JWT, OAuth2 login, `get_current_user` dependency _(DONE)_
 - [x] **3.3** RBAC (roles) + document ownership (owner-only access, 403 vs 404) _(DONE)_
-- [ ] **3.4** Middleware deep-dive, CORS, request context
+- [x] **3.4** Middleware deep-dive, CORS, request context _(DONE)_
 - [ ] **3.5** Background tasks vs **Celery** workers + Redis broker
 - [ ] **3.6** **Redis** caching & rate limiting
 - [ ] **3.7** **WebSockets** & **SSE** streaming responses
@@ -167,5 +167,7 @@
 | 2026-07-12 | 3.2 JWT & login | Done. Installed `pyjwt`. JWT funcs in security.py (`create_access_token`/`decode_access_token`, HS256, 30min). `Token` schema, `app/api/auth.py` `POST /auth/login` (`OAuth2PasswordRequestForm`, verify_password, same 401 for both fail cases). `app/api/deps.py` (`oauth2_scheme`, `get_current_user`, `CurrentUser`), `user_repo.get_by_id`, protected `GET /users/me`. Full flow verified via curl. Deep dives: signed-not-encrypted, SECRET_KEY vs SIGNATURE, encoding vs encryption, real AES token (`Salted__`). Bugs: `response_class`→`response_model`, `tokenUrl="auth/logi"` typo (Swagger-only). |
 
 | 2026-07-12 | 3.3 RBAC & ownership | Done. Added `role` to User (server_default "user") + migration. `require_admin`/`AdminUser` (composes get_current_user) + admin-only `GET /users` (`user_repo.list_all`). Documents scoped to owner: `owner_id=current_user.id` on create, list filters by owner, `get_owned_document_or_404` (404 missing / 403 not-yours); all doc routes require auth. Bootstrapped admin via SQL. Truncated all data (RESTART IDENTITY CASCADE). Verified full authz matrix (401/403/404, cross-user isolation) via curl. |
+
+| 2026-07-13 | 3.4 Middleware & CORS | Done. Custom `@app.middleware("http")` timing middleware (X-Process-Time header on every response) + `CORSMiddleware` (allow localhost:3000). Learned middleware vs dependency, call_next pre/post, CORS is browser-enforced (curl never triggers it). Debug lesson: `curl -s` hides connection-refused (exit 7) — server was just down, code was fine. |
 
 _(We'll tick boxes above and add rows here as we go.)_

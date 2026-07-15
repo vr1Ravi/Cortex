@@ -4,7 +4,10 @@ Run the dev server from the project root:
     ./.venv/bin/uvicorn app.main:app --reload
 """
 
+import time
+
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import auth, documents, users
@@ -15,6 +18,25 @@ app = FastAPI(
     description="AI Knowledge Assistant — upload documents and chat with them.",
     version="0.1.0",
 )
+
+# --- CORS: allow your future frontend to call the API from the browser ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],   # the frontend origin(s) you'll allow
+    allow_credentials=True,
+    allow_methods=["*"],                        # GET, POST, PUT, DELETE, ...
+    allow_headers=["*"],                        # including Authorization
+)
+
+# --- Custom middleware: time every request, expose it in a response header ---
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed = time.perf_counter() - start
+    response.headers["X-Process-Time"] = f"{elapsed:.4f}s"
+    return response
 
 app.include_router(documents.router)
 app.include_router(users.router)
