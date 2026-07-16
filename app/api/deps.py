@@ -3,14 +3,18 @@
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.redis_client import redis_client
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.repositories import user as user_repo
+
+RATE_LIMIT = 5    # max requests...
+RATE_WINDOW = 60  # ...per this many seconds
 
 # Extracts the token from the "Authorization: Bearer <token>" header.
 # tokenUrl points Swagger UI at the login route (enables the "Authorize" button in /docs).
@@ -52,3 +56,19 @@ async def require_admin(current_user: CurrentUser) -> User:
     return current_user
 
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+async def rate_limit(request: Request) -> None:
+    """Fixed-window rate limit, keyed by client IP. Raises 429 when exceeded."""
+    identifier = request.client.host
+    key = f"ratelimit:{identifier}"
+
+    count = await redis_client.incr(key)  # atomic +1 (creates key at 1 if new)
+    if count == 1:
+        await redis_client.expire(key, RATE_WINDOW)  # first hit → start the 60s window
+
+    if count > RATE_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded: max {RATE_LIMIT} requests per {RATE_WINDOW}s"
+        )

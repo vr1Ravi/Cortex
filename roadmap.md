@@ -25,17 +25,17 @@
 
 ## 🗺️ The 7 phases at a glance
 
-| Phase | Theme                                              | Sessions | Hours  |
-| ----- | -------------------------------------------------- | :------: | :----: |
-| 0     | Foundations (async, typing, tooling)               |    3     |   6    |
-| 1     | FastAPI core (Pydantic, DI, routers)               |    6     |   12   |
-| 2     | Data & persistence (async SQLAlchemy, Alembic)     |    6     |   12   |
-| 2+    | (Phase 2 ran 7 sessions — relationships & perf split) |   +1     |   +2   |
-| 3     | Advanced backend (auth, Celery, Redis, WebSockets) |    8     |   16   |
-| 4     | LLM integration (Claude API, streaming, tools)     |    5     |   10   |
-| 5     | RAG + LangChain (embeddings, pgvector, agents)     |    8     |   16   |
-| 6     | Ship it (testing, Docker, CI/CD, observability)    |    6     |   12   |
-|       | **Total**                                          |  **42**  | **84** |
+| Phase | Theme                                                 | Sessions | Hours  |
+| ----- | ----------------------------------------------------- | :------: | :----: |
+| 0     | Foundations (async, typing, tooling)                  |    3     |   6    |
+| 1     | FastAPI core (Pydantic, DI, routers)                  |    6     |   12   |
+| 2     | Data & persistence (async SQLAlchemy, Alembic)        |    6     |   12   |
+| 2+    | (Phase 2 ran 7 sessions — relationships & perf split) |    +1    |   +2   |
+| 3     | Advanced backend (auth, Celery, Redis, WebSockets)    |    8     |   16   |
+| 4     | LLM integration (Claude API, streaming, tools)        |    5     |   10   |
+| 5     | RAG + LangChain (embeddings, pgvector, agents)        |    8     |   16   |
+| 6     | Ship it (testing, Docker, CI/CD, observability)       |    6     |   12   |
+|       | **Total**                                             |  **42**  | **84** |
 
 ---
 
@@ -73,7 +73,7 @@
 - [x] **3.3** RBAC (roles) + document ownership (owner-only access, 403 vs 404) _(DONE)_
 - [x] **3.4** Middleware deep-dive, CORS, request context _(DONE)_
 - [x] **3.5** Background tasks vs **Celery** workers + Redis broker _(DONE)_
-- [ ] **3.6** **Redis** caching & rate limiting
+- [x] **3.6** **Redis** caching & rate limiting _(DONE)_
 - [ ] **3.7** **WebSockets** & **SSE** streaming responses
 - [ ] **3.8** File uploads → object storage, config/secrets (`pydantic-settings`), structured logging
 
@@ -171,5 +171,7 @@
 | 2026-07-13 | 3.4 Middleware & CORS | Done. Custom `@app.middleware("http")` timing middleware (X-Process-Time header on every response) + `CORSMiddleware` (allow localhost:3000). Learned middleware vs dependency, call_next pre/post, CORS is browser-enforced (curl never triggers it). Debug lesson: `curl -s` hides connection-refused (exit 7) — server was just down, code was fine. |
 
 | 2026-07-16 | 3.5 Celery + Redis | Done. Added `redis:7` to docker-compose; installed `celery[redis]`. `app/worker.py` (Celery app, redis broker+backend, `process_document` task with time.sleep to simulate heavy work). `app/api/tasks.py` (`POST /tasks/process-document` → `.delay()` → 202 + task_id; `GET /tasks/{id}` → AsyncResult status/result). Ran worker `--pool=solo`; verified full flow PENDING→SUCCESS, API returns instantly. Learned broker/backend/worker arch, `.delay()` serialization (pass ids/primitives not sessions/ORM objects), 202 Accepted. |
+
+| 2026-07-16 | 3.6 Redis caching & rate limiting | Done. `app/core/redis_client.py` (async `redis.asyncio` client, db 1, decode_responses). Caching: `GET /demo/expensive/{n}` cache-aside (get→miss→compute→set ex=30); verified 2s miss vs 0.02s hit (~85×). Rate limiting: `rate_limit` dep (INCR+EXPIRE fixed window, 429), applied via `dependencies=[Depends(...)]`; verified 5×200 then 429. Bug: `decode_response`→`decode_responses` typo (root cause hidden under misleading `IndexError: pop from empty list` — lesson: read chained tracebacks to the BOTTOM). |
 
 _(We'll tick boxes above and add rows here as we go.)_

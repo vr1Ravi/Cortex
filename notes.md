@@ -573,3 +573,27 @@ role? (2) Why not pass a session/ORM object to a task; what instead? (3) Backgro
 JSON-serialized to cross to another process; sessions/ORM/connections can't serialize → pass
 ids/primitives and let the task re-fetch. (3) BackgroundTasks = light, quick, disposable, in-process;
 Celery = heavy, slow, needs retries/reliability/scale, survives restarts.
+
+---
+
+## 3.6 — Redis caching & rate limiting
+
+**Gotcha:** **Cache-aside**: check cache → HIT return it (fast) / MISS do the work, store with **TTL**,
+return. TTL bounds staleness (speed vs freshness tradeoff); hardest part = invalidation. Async client:
+`redis.asyncio.from_url(url, decode_responses=True)` (decode_responses → str not bytes; use db 1 to
+separate from Celery's db 0). Cache: `get` → on None compute → `set(key, val, ex=SECONDS)`.
+**Rate limiting** (fixed window): `INCR key` (atomic +1); if count==1 `EXPIRE key WINDOW`; if
+count>LIMIT → **429**. `INCR` atomicity (Redis single-threaded) = no lost updates under concurrency.
+Applied as a dependency via `@router.get(..., dependencies=[Depends(rate_limit)])` — decorator-level
+`dependencies=[]` for **side-effect gates that return no value** (vs a param like `current_user` when
+you need the return). Debug lesson: a chained traceback's ROOT cause is at the BOTTOM (the misleading
+`IndexError: pop from empty list` hid the real `decode_response` typo — read past "direct cause of").
+
+**❓ Q:** (1) Cache-aside flow (hit vs miss) + what's TTL for? (2) Why must `INCR` be atomic for rate
+limiting? (3) Why `dependencies=[Depends(rate_limit)]` in the decorator vs a function parameter?
+
+**A:** (1) HIT → serve the cached value; MISS → compute/query, store it with TTL, return. TTL =
+how long the cache entry lives before expiring (bounds staleness). (2) Without atomicity, concurrent
+requests can both read the same count and write the same +1 → increments get lost → users slip past
+the limit. Atomic `INCR` counts every request. (3) `dependencies=[...]` in the decorator is for a
+side-effect gate that returns no value; a function parameter is for when you need the returned value.

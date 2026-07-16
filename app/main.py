@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import auth, documents, tasks, users
+from app.api import auth, demo, documents, tasks, users
 from app.core.exceptions import DocumentNotFoundError, EmailAlreadyExistsError
 
 app = FastAPI(
@@ -42,6 +42,7 @@ app.include_router(documents.router)
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(tasks.router)
+app.include_router(demo.router)
 
 
 

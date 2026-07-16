@@ -62,3 +62,18 @@ SET user:5:name "Ravi"
 GET user:5:name → "Ravi"
 In-memory — it keeps all data in RAM, not on disk. This is the headline feature.
 Data store / server — it runs as a separate server (your cortex-redis container) that apps talk to over the network.
+
+- Redis = a blazing-fast, in-memory key-value store used for anything that needs speed and is transient/recomputable: caching, rate limiting, queues, sessions, real-time. Postgres holds the truth; Redis makes hot paths fast.
+
+- Your API will hit Postgres constantly for the same data (e.g., a user's profile on every request). Caching hot data in Redis means fewer DB round-trips → faster responses + a lighter database. And rate limiting protects expensive endpoints (like the LLM calls coming in Phase 4 — you don't want one user hammering a pricey AI endpoint). Redis is the speed-and-control layer in front of your durable store.
+
+- What Redis is used for (you've done one, about to do two)
+  Message broker / task queue — ✅ you already did this (Celery broker/backend in 3.5). Its list structure holds the task queue.
+  Caching — store expensive query/computation results with a TTL, serve repeats instantly. ← 3.6 next
+  Rate limiting — fast counters (INCR + EXPIRE) to cap requests per user/window. ← 3.6 next
+  Session storage — store login sessions (fast lookup per request).
+  Pub/Sub & real-time — chat, live notifications, presence.
+  Distributed locks — coordinate across multiple app servers.
+  Leaderboards / rankings — sorted sets (game scores, trending).
+  - db 1 — a single Redis server has 16 numbered "databases" (0–15). Celery uses 0; we use 1 so our cache keys don't mix with task queue data. Clean separation.
+    decode_responses=True — makes Redis return str instead of raw bytes, so you get clean Python strings back.
