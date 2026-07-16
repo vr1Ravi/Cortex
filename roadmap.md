@@ -74,7 +74,7 @@
 - [x] **3.4** Middleware deep-dive, CORS, request context _(DONE)_
 - [x] **3.5** Background tasks vs **Celery** workers + Redis broker _(DONE)_
 - [x] **3.6** **Redis** caching & rate limiting _(DONE)_
-- [ ] **3.7** **WebSockets** & **SSE** streaming responses
+- [x] **3.7** **WebSockets** & **SSE** streaming responses _(DONE)_
 - [ ] **3.8** File uploads → object storage, config/secrets (`pydantic-settings`), structured logging
 
 ### Phase 4 — LLM Integration · 5 sessions
@@ -173,5 +173,7 @@
 | 2026-07-16 | 3.5 Celery + Redis | Done. Added `redis:7` to docker-compose; installed `celery[redis]`. `app/worker.py` (Celery app, redis broker+backend, `process_document` task with time.sleep to simulate heavy work). `app/api/tasks.py` (`POST /tasks/process-document` → `.delay()` → 202 + task_id; `GET /tasks/{id}` → AsyncResult status/result). Ran worker `--pool=solo`; verified full flow PENDING→SUCCESS, API returns instantly. Learned broker/backend/worker arch, `.delay()` serialization (pass ids/primitives not sessions/ORM objects), 202 Accepted. |
 
 | 2026-07-16 | 3.6 Redis caching & rate limiting | Done. `app/core/redis_client.py` (async `redis.asyncio` client, db 1, decode_responses). Caching: `GET /demo/expensive/{n}` cache-aside (get→miss→compute→set ex=30); verified 2s miss vs 0.02s hit (~85×). Rate limiting: `rate_limit` dep (INCR+EXPIRE fixed window, 429), applied via `dependencies=[Depends(...)]`; verified 5×200 then 429. Bug: `decode_response`→`decode_responses` typo (root cause hidden under misleading `IndexError: pop from empty list` — lesson: read chained tracebacks to the BOTTOM). |
+
+| 2026-07-16 | 3.7 WebSockets & SSE | Done. `@router.websocket("/demo/ws/echo")` (accept + receive/send loop + WebSocketDisconnect) — verified echo via TestClient. SSE: `GET /demo/stream` async generator `yield f"data: {word}\n\n"` + `StreamingResponse(media_type="text/event-stream")` — verified words drip ~0.3s apart via `curl -N`. Learned WS (persistent, two-way) vs SSE (one-way server→client stream); this is the exact Phase 4 LLM token-streaming skeleton. |
 
 _(We'll tick boxes above and add rows here as we go.)_

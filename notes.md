@@ -597,3 +597,30 @@ how long the cache entry lives before expiring (bounds staleness). (2) Without a
 requests can both read the same count and write the same +1 → increments get lost → users slip past
 the limit. Atomic `INCR` counts every request. (3) `dependencies=[...]` in the decorator is for a
 side-effect gate that returns no value; a function parameter is for when you need the returned value.
+
+---
+
+## 3.7 — WebSockets & SSE (streaming)
+
+**Gotcha:** Normal HTTP = one request→one response→closes; can't push later. For live data:
+**WebSocket** = persistent, **two-way** (both sides send anytime); `@app.websocket(...)` →
+`await ws.accept()` then a `while True` receive/send loop (function stays alive for the whole
+connection), handle `WebSocketDisconnect`. Use for chat/collab/real-time bidirectional. **SSE** =
+**one-way** server→client stream over plain HTTP; client makes ONE request, server keeps it open and
+flushes chunks. Build with an **async generator** (`yield f"data: {payload}\n\n"` — SSE frame =
+`data:` + blank line) + **`StreamingResponse(gen(), media_type="text/event-stream")`**. BOTH pieces
+needed: the generator/`yield` produces chunks incrementally, `StreamingResponse` flushes each to the
+client instead of buffering. Test SSE with `curl -N` (disables buffering → see the drip). **This is the
+exact Phase 4 LLM streaming skeleton** — swap the loop to `async for token in claude_stream(...)`.
+SSE fits LLM streaming because token flow is one-directional (server→client); WebSocket would be
+overkill (only needed if client must send mid-stream).
+
+**❓ Q:** (1) WebSocket vs SSE — difference + when each? (2) Two things that make SSE stream
+gradually? (3) Why SSE (not WebSocket) for streaming an LLM answer?
+
+**A:** (1) WebSocket = persistent two-way (client & server both send); SSE = one-way server→client
+stream, client only makes the initial request. WS for bidirectional (chat), SSE for server-push
+(tokens, notifications). (2) The async generator with `yield` (produces chunks incrementally) AND
+`StreamingResponse(media_type="text/event-stream")` (flushes each chunk as produced instead of
+buffering the whole response). (3) The token stream is one-directional (server→client only), which is
+exactly SSE's shape — simpler, plain HTTP, auto-reconnect; WS is overkill unless the client sends mid-stream.
