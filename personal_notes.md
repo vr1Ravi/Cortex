@@ -81,3 +81,6 @@ Data store / server — it runs as a separate server (your cortex-redis containe
 * Big binary files → object storage (S3/MinIO); the database stores metadata and a pointer, not the bytes. Storing extracted text in the DB (like Cortex does) is fine — that's queryable data, not a blob.
 
 * A BLOB (or BYTEA in Postgres) column stores raw bytes — a PDF, an image, an audio file — directly in a table cell, as opposed to text or numbers.
+
+* Need the value? → make it a parameter (current_user: CurrentUser).
+  Just need the gate, don't use the value? → put it in dependencies=[...]

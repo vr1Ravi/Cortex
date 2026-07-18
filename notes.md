@@ -676,3 +676,63 @@ every other request; `await` on the async client yields so other requests keep f
 message history every request (and cost grows with it). (3a) Separation of concerns — endpoint owns
 HTTP, service owns AI logic → provider is swappable (one function) + testable. (3b) LLM calls cost
 money/tokens; without a rate limit one user could drain your quota/bill.
+
+---
+
+## 4.2 — Streaming LLM tokens over SSE
+
+**Gotcha:** Combine 3.7 (SSE) + 4.1 (LLM). Gemini streaming: `async for chunk in await
+gemini.aio.models.generate_content_stream(...)` → `chunk.text` (guard `if chunk.text` — some are
+empty). Service = an **async generator** yielding text pieces (`-> AsyncIterator[str]`; it uses
+`yield` not `return`, so it produces MANY strs over time, not one). Endpoint wraps it in an
+`event_generator` yielding `data: {json.dumps(token)}\n\n` (JSON-encode! real LLM chunks contain
+newlines/special chars that would break raw SSE framing) + `data: [DONE]\n\n`, via `StreamingResponse`.
+**Server is a relay between TWO live streams:** `async for` RECEIVES from Gemini (in), `yield` SENDS to
+client (out). Under the hood = **chunked transfer encoding** (`Transfer-Encoding: chunked`, no
+Content-Length, connection held open, size-prefixed chunks, ends with a 0-length chunk); each `yield`
+→ one ASGI `http.response.body` (more_body=True) → uvicorn writes+flushes a TCP chunk. Buffering hides
+the drip: use `curl -N` (curl buffers stdout otherwise); **Swagger `/docs` can't show SSE live** (shows
+all at end); prod: disable proxy buffering (nginx `X-Accel-Buffering: no`). BaseHTTPMiddleware here
+does NOT break streaming (verified). `yield` (generator) vs `return` (one value).
+
+**❓ Q:** (1) What HTTP mechanism sends a body of unknown length with the connection kept open?
+(2) Which keyword receives Gemini's stream vs sends to the client? (3) Why did it look "all at once"
+in `/docs` but drip over `curl -N`?
+
+**A:** (1) Chunked transfer encoding (HTTP/1.1) — no Content-Length, connection stays open, body sent
+as size-prefixed chunks ending in a zero-length chunk. (2) `async for chunk` receives from Gemini (in);
+`yield token` sends to the client (out). (3) Swagger UI buffers the whole SSE response and renders it at
+the end (can't display a live stream); `curl -N` flushes each chunk so you see the drip.
+
+**Doubts cleared this session:**
+
+- **Why is `stream_reply`'s return type `AsyncIterator[str]` when it "returns" text?** Because it uses
+  `yield`, not `return` — that makes it an **async generator**, not a normal function. Calling it gives
+  you an async iterator you `async for` over; each iteration yields a `str`. `AsyncIterator[str]` types
+  *what you iterate to get* (a stream of strs), not a single returned str. `return x` = one value;
+  `yield x` = many values over time. (`AsyncGenerator[str, None]` is the more specific equivalent.)
+
+- **Why is `current_user: CurrentUser` there if unused?** It's a **side-effect gate** — declaring it
+  runs `get_current_user`, so no/invalid token → 401 before the body runs (requires login). Since we
+  don't read the value *yet*, the stricter form is `dependencies=[Depends(get_current_user)]` (like
+  `rate_limit`); kept it as a param because 4.5 will use `current_user.id` (tie chat to the user).
+  Rule: need the value → parameter; just need the gate → `dependencies=[...]`.
+
+- **How the stream flows API↔service (the line-by-line trace):** returning `StreamingResponse(gen())`
+  doesn't run the generator — Starlette *pulls* from it. `event_generator` `async for`s over
+  `stream_reply`, which `async for`s over Gemini. Each Gemini chunk → `stream_reply` `yield`s the text
+  → `event_generator` `yield`s the SSE frame → Starlette flushes it to the socket → client sees it now.
+  One chunk = one pass through both generators = one flush. Nothing buffered in the middle.
+
+- **Two streaming connections, and which uses `yield`:** (1) server ← Gemini and (2) server → client are
+  both open at once; the server is a **relay/proxy** between them. But: you **RECEIVE** conn 1 with
+  `async for` (Gemini yields to you over the network; you iterate), and you **SEND** conn 2 with `yield`
+  (both `yield`s feed the client's `StreamingResponse`). So `async for` = in, `yield` = out.
+
+- **How streaming works under the hood:** normal HTTP sends `Content-Length` + the whole body, then
+  closes. Streaming uses **chunked transfer encoding** (`Transfer-Encoding: chunked`): no Content-Length,
+  connection held open, body sent as `<hex-size>\r\n<data>\r\n` chunks, ending with `0\r\n\r\n`. ASGI:
+  each `yield` → an `http.response.body` message with `more_body=True` → uvicorn writes+flushes a TCP
+  chunk; the generator ending → `more_body=False` closes it. SSE = chunked HTTP with `text/event-stream`
+  + `data: ...\n\n` framing. Buffers (curl stdout, nginx, Swagger) hide the drip → `curl -N` / disable
+  proxy buffering.
