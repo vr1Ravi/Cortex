@@ -5,12 +5,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, rate_limit
 from app.core.database import get_db
 from app.core.exceptions import DocumentNotFoundError
 from app.models.document import Document
 from app.repositories import document as document_repo
+from app.schemas.analysis import DocumentAnalysis
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
+from app.services import analysis as analysis_service
 
 MAX_UPLOAD_BYTES = 1_000_000   # 1 MB
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -108,3 +110,14 @@ async def upload_document(
     
     data = DocumentCreate(title=(file.filename or "untitled")[:200], content=content, tags=[])
     return await document_repo.create(session, data, owner_id=current_user.id)
+
+@router.post(
+    "/{doc_id}/analyze",
+    response_model=DocumentAnalysis,
+    dependencies=[Depends(rate_limit)]
+)
+async def analyze_document(
+    doc: Annotated[Document, Depends(get_owned_document_or_404)],
+) -> DocumentAnalysis:
+     """AI-analyze one of the user's documents into structured data."""
+     return await analysis_service.analyze_documnet(doc.content)

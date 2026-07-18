@@ -736,3 +736,28 @@ the end (can't display a live stream); `curl -N` flushes each chunk so you see t
   chunk; the generator ending → `more_body=False` closes it. SSE = chunked HTTP with `text/event-stream`
   + `data: ...\n\n` framing. Buffers (curl stdout, nginx, Swagger) hide the drip → `curl -N` / disable
   proxy buffering.
+
+---
+
+## 4.3 — Prompt design & structured outputs
+
+**Gotcha:** Two levers: **`system_instruction`** (persona/rules for the whole conversation) vs the
+**user message** (`contents` = the task). In Gemini both go through `config=types.GenerateContentConfig(
+system_instruction=..., ...)` (`from google.genai import types`). **Structured output** = force the
+model to return JSON matching a schema instead of free text you must parse: `response_mime_type=
+"application/json"` + `response_schema=SomePydanticModel` → `response.parsed` is a validated instance
+(occasionally `None` → fall back to `json.loads(response.text)`). Why it beats "ask for JSON in the
+prompt + parse": prompt-asking is unreliable (model adds prose / markdown fences / malformed JSON /
+missing fields / wrong types); `response_schema` is **structurally enforced** — guaranteed shape, typed
+object, zero parsing. THE technique for LLMs as pipeline components (extraction, classification, tool
+args). Built `POST /documents/{id}/analyze` → `DocumentAnalysis{summary, tags[], key_points[]}`,
+composing `get_owned_document_or_404` (authz+404) + `rate_limit` + service layer + structured output.
+
+**❓ Q:** (1) system_instruction vs user message? (2) Why is `response_schema` more reliable than asking
+for JSON in the prompt and parsing it yourself? (3) Two things `/analyze` reused from earlier phases?
+
+**A:** (1) system_instruction = standing persona/rules (how it behaves); user message = the specific
+task/input. (2) Prompt-asking may not comply (prose, code fences, malformed/missing/wrong-typed JSON) →
+brittle parsing that still breaks; `response_schema` enforces the shape at decode time → guaranteed
+valid JSON + a validated Pydantic object, no parsing. (3) `get_owned_document_or_404` (exists + owned →
+authz/404) and `rate_limit` (caps abuse of an expensive endpoint); also service layer + structured output.

@@ -83,7 +83,7 @@
 
 - [x] **4.1** Calling the **Gemini API** from the backend (`google-genai`, async, messages) _(DONE)_
 - [x] **4.2** **Streaming** tokens to the client over SSE _(DONE)_
-- [ ] **4.3** Prompt design + **structured outputs / tool use**
+- [x] **4.3** Prompt design + **structured outputs** (system instruction, `response_schema`) _(DONE)_
 - [ ] **4.4** Production concerns: token/cost handling, retries, timeouts, error handling
 - [ ] **4.5** Wire real AI chat into Cortex
 
@@ -183,5 +183,7 @@
 | 2026-07-18 | 4.1 Calling the LLM (Gemini) | Done. Chose **Google Gemini** (free tier) as the provider — `google-genai` SDK. `app/core/llm.py` async client, `app/schemas/chat.py`, `app/services/chat.py` (`generate_reply` → `await gemini.aio.models.generate_content`), `app/api/chat.py` `POST /chat` (auth + rate_limit). Working end-to-end — Cortex gets real LLM replies. Gotcha: `gemini-2.0-flash` had 0 free quota on the day-old account (429 `limit:0`); `gemini-flash-latest` works. Lesson: LLM is a swappable component behind the service layer. |
 
 | 2026-07-18 | 4.2 Streaming LLM over SSE | Done. `chat.py` service `stream_reply` async generator (`async for chunk in await gemini.aio...generate_content_stream`, `yield chunk.text`); `POST /chat/stream` endpoint `event_generator` → `data: {json.dumps(token)}\n\n` + `[DONE]` via `StreamingResponse`. Verified drip via `curl -N` (server relays 2 streams: `async for` in ← Gemini, `yield` out → client). Deep-dived chunked transfer encoding / ASGI more_body / buffering. Gotcha: looked "all at once" in `/docs` (Swagger can't render SSE) — use `curl -N`. |
+
+| 2026-07-18 | 4.3 Prompt design + structured output | Done. Added `system_instruction` (Cortex persona) via `types.GenerateContentConfig`. Structured output: `app/schemas/analysis.py` `DocumentAnalysis`, `app/services/analysis.py` (`response_schema=DocumentAnalysis` → `response.parsed`), `POST /documents/{id}/analyze` (composes owned-doc dep + rate_limit + service). Verified: analyzed a real doc → clean validated JSON {summary, tags[], key_points[]}. Learned system vs user message, why schema-enforced output beats prompt-and-parse. |
 
 _(We'll tick boxes above and add rows here as we go.)_
