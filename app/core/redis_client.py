@@ -3,7 +3,9 @@
 
 import redis.asyncio as redis
 
-# db 1 keeps this separate from Celery's broker/backend on db 0.
-REDIS_URL = "redis://localhost:6379/1"
+from app.core.config import settings
 
-redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+# db 1 keeps this separate from Celery's broker/backend on db 0.
+
+
+redis_client = redis.from_url(settings.redis_url, decode_responses=True)

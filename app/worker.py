@@ -4,10 +4,12 @@ import time
 
 from celery import Celery
 
+from app.core.config import settings
+
 celery_app = Celery(
     "cortex",
-    broker="redis://localhost:6379/0",   # where tasks are pushed/pulled
-    backend="redis://localhost:6379/0"   # where results are stored
+    broker=settings.celery_broker_url,   # where tasks are pushed/pulled
+    backend=settings.celery_result_backend   # where results are stored
 )
 
 @celery_app.task

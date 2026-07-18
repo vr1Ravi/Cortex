@@ -624,3 +624,28 @@ stream, client only makes the initial request. WS for bidirectional (chat), SSE 
 `StreamingResponse(media_type="text/event-stream")` (flushes each chunk as produced instead of
 buffering the whole response). (3) The token stream is one-directional (server→client only), which is
 exactly SSE's shape — simpler, plain HTTP, auto-reconnect; WS is overkill unless the client sends mid-stream.
+
+---
+
+## 3.8 — Config/secrets (pydantic-settings) & file uploads
+
+**Gotcha:** Don't hardcode config/secrets — a committed `SECRET_KEY` lets anyone with repo access
+forge JWTs. **12-factor**: config in **env vars** (from `.env` in dev, gitignored; real env vars in
+prod). `pydantic-settings` `class Settings(BaseSettings)` with `model_config =
+SettingsConfigDict(env_file=".env", extra="ignore")`; fields = env vars (case-insensitive:
+`database_url` ← `DATABASE_URL`); no-default fields are **required** (fail fast if missing). `@lru_cache
+get_settings()` parses once. **`model_config` is a RESERVED Pydantic name** (config) — any other name
+(`model_string`) is read as a field → "non-annotated attribute" error. Solves: (1) secrets out of git,
+(2) per-environment config with no code change. **File uploads** = `multipart/form-data` → `UploadFile`
+param (has `.filename`, `.content_type`, `await .read()`; spooled to disk if large). ALWAYS validate
+untrusted uploads: **size** (cap → 413, else DoS/memory), **type/encoding** (→ 400, else garbage
+downstream), non-empty. Needs `python-multipart` (already installed).
+
+**❓ Q:** (1) Why is a hardcoded SECRET_KEY dangerous + 2 problems `.env`/pydantic-settings solve?
+(2) Why validate uploaded files (size/type)? (3) Why did `model_config` work but `model_string` fail?
+
+**A:** (1) Committed secret → anyone with repo access can forge JWTs/impersonate users. Fixes:
+secrets out of git (gitignored `.env`) + per-environment config without code changes. (2) Uploads are
+untrusted input: cap size (else a huge file exhausts memory/disk = DoS → 413); check type/encoding
+(else non-text/binary breaks processing → 400). (3) `model_config` is a reserved Pydantic name for
+model configuration; any other name is treated as a data field needing a type annotation.

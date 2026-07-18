@@ -77,3 +77,7 @@ Data store / server — it runs as a separate server (your cortex-redis containe
   Leaderboards / rankings — sorted sets (game scores, trending).
   - db 1 — a single Redis server has 16 numbered "databases" (0–15). Celery uses 0; we use 1 so our cache keys don't mix with task queue data. Clean separation.
     decode_responses=True — makes Redis return str instead of raw bytes, so you get clean Python strings back.
+
+* Big binary files → object storage (S3/MinIO); the database stores metadata and a pointer, not the bytes. Storing extracted text in the DB (like Cortex does) is fine — that's queryable data, not a blob.
+
+* A BLOB (or BYTEA in Postgres) column stores raw bytes — a PDF, an image, an audio file — directly in a table cell, as opposed to text or numbers.

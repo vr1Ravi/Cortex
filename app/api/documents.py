@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
@@ -12,6 +12,7 @@ from app.models.document import Document
 from app.repositories import document as document_repo
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
 
+MAX_UPLOAD_BYTES = 1_000_000   # 1 MB
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 # A reusable alias so we don't retype the session dependency everywhere.
@@ -87,3 +88,23 @@ async def list_documents(
         skip=pagination["skip"], 
         limit=pagination["limit"]
         )
+
+@router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    session: SessionDep,
+    current_user: CurrentUser,
+    file: UploadFile
+) -> Document:
+    content_bytes = await file.read()
+
+    if len(content_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413, "File too large (max 1 MB)")
+    try:
+        content = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "FIle must be UTF-8 text")
+    if not content.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "FIle is empty")
+    
+    data = DocumentCreate(title=(file.filename or "untitled")[:200], content=content, tags=[])
+    return await document_repo.create(session, data, owner_id=current_user.id)

@@ -5,14 +5,14 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-# Hardcoded for now — moves to env-based settings in Phase 3.8.
+from app.core.config import settings
+
 # Format: postgresql+asyncpg://<user>:<password>@<host>:<port>/<dbname>
-DATABASE_URL = "postgresql+asyncpg://cortex:cortex@localhost:5432/cortex"
 
 
 # 1. ENGINE — manages the connection pool to Postgres. Created once, app-wide.
 #    echo=True logs every SQL statement — great for learning, turn off later.
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(settings.database_url, echo=True)
 
 # 2. SESSION FACTORY — makes new AsyncSession objects (one per request).
 #    expire_on_commit=False keeps objects usable AFTER commit (needed so we can
