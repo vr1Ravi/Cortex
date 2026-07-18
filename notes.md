@@ -649,3 +649,30 @@ secrets out of git (gitignored `.env`) + per-environment config without code cha
 untrusted input: cap size (else a huge file exhausts memory/disk = DoS → 413); check type/encoding
 (else non-text/binary breaks processing → 400). (3) `model_config` is a reserved Pydantic name for
 model configuration; any other name is treated as a data field needing a type annotation.
+
+---
+
+## 4.1 — Calling the LLM API (Google Gemini)
+
+**Gotcha:** Provider = **Google Gemini** (free tier), `google-genai` SDK — `from google import genai`;
+`gemini = genai.Client(api_key=...)`. Use the **async** client so a multi-second LLM call doesn't
+block the event loop (Phase 0): `await gemini.aio.models.generate_content(model=..., contents=msg)`
+→ `response.text`. LLM APIs are **stateless** — the model remembers nothing; for multi-turn YOU resend
+the full history each call (growing history = growing cost). Put the LLM call in a **service layer**
+(`app/services/chat.py`), not the endpoint → provider is swappable (change one function: Gemini→Claude→
+local), testable, reusable. Protect LLM endpoints with **auth + `rate_limit`** (they cost money/tokens —
+3.3 + 3.6 paying off). Model in a **setting** (`GEMINI_MODEL`), not hardcoded. Gotcha: brand-new Gemini
+free accounts can have **0 quota** on a specific model (`429 limit:0`) — `gemini-flash-latest` worked;
+each model has its own free quota. Architecture: HTTP→auth→rate_limit→service→LLM→response; the AI is
+one swappable component.
+
+**❓ Q:** (1) Why the async client + `await` instead of the sync call? (2) Gemini is stateless — what
+does that mean for multi-turn chat? (3) Why (a) a service module for the LLM call and (b) `rate_limit`
+on the endpoint?
+
+**A:** (1) A sync call blocks the single event-loop thread for the multi-second LLM call, freezing
+every other request; `await` on the async client yields so other requests keep flowing (Phase 0).
+(2) The model remembers nothing between calls, so to continue a conversation you resend the entire
+message history every request (and cost grows with it). (3a) Separation of concerns — endpoint owns
+HTTP, service owns AI logic → provider is swappable (one function) + testable. (3b) LLM calls cost
+money/tokens; without a rate limit one user could drain your quota/bill.

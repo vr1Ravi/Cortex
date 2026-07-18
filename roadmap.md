@@ -79,7 +79,9 @@
 
 ### Phase 4 — LLM Integration · 5 sessions
 
-- [ ] **4.1** Calling the **Claude API** from a backend (SDK, messages, params)
+> **Provider: Google Gemini** (`google-genai` SDK) — chosen for its free tier. Same patterns as any LLM.
+
+- [x] **4.1** Calling the **Gemini API** from the backend (`google-genai`, async, messages) _(DONE)_
 - [ ] **4.2** **Streaming** tokens to the client over SSE
 - [ ] **4.3** Prompt design + **structured outputs / tool use**
 - [ ] **4.4** Production concerns: token/cost handling, retries, timeouts, error handling
@@ -177,5 +179,7 @@
 | 2026-07-16 | 3.7 WebSockets & SSE | Done. `@router.websocket("/demo/ws/echo")` (accept + receive/send loop + WebSocketDisconnect) — verified echo via TestClient. SSE: `GET /demo/stream` async generator `yield f"data: {word}\n\n"` + `StreamingResponse(media_type="text/event-stream")` — verified words drip ~0.3s apart via `curl -N`. Learned WS (persistent, two-way) vs SSE (one-way server→client stream); this is the exact Phase 4 LLM token-streaming skeleton. |
 
 | 2026-07-17 | 3.8 Config + file uploads | Done. `pydantic-settings`: `app/core/config.py` `Settings(BaseSettings)` + `.env` (gitignored); refactored database.py/security.py/redis_client.py/worker.py/alembic env.py to use `settings` (secrets out of code). File uploads: `POST /documents/upload` (`UploadFile`, validate size 413/encoding+empty 400, decode → DocumentCreate → owned doc). Verified app boots + JWT round-trip via settings + upload 201. Bugs: `model_string`→`model_config`, get_settings indented inside class. **PHASE 3 COMPLETE (3.1–3.8, 8 sessions).** |
+
+| 2026-07-18 | 4.1 Calling the LLM (Gemini) | Done. Chose **Google Gemini** (free tier) as the provider — `google-genai` SDK. `app/core/llm.py` async client, `app/schemas/chat.py`, `app/services/chat.py` (`generate_reply` → `await gemini.aio.models.generate_content`), `app/api/chat.py` `POST /chat` (auth + rate_limit). Working end-to-end — Cortex gets real LLM replies. Gotcha: `gemini-2.0-flash` had 0 free quota on the day-old account (429 `limit:0`); `gemini-flash-latest` works. Lesson: LLM is a swappable component behind the service layer. |
 
 _(We'll tick boxes above and add rows here as we go.)_

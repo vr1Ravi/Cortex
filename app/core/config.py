@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/0"
 
+    # Google Gemini
+    google_api_key: str
+    gemini_model: str = "gemini-2.0-flash"
+
 
 
 @lru_cache
@@ -31,3 +35,4 @@ def get_settings() -> Settings:
     
 
 settings = get_settings()
+
