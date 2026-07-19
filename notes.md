@@ -1,14 +1,14 @@
 # 📓 FastAPI Learning Notes
 
 > Lean revision notes: just the **gotcha/trap** and a **recall question**.
-> On revision, answer the question from memory *before* reading the answer.
+> On revision, answer the question from memory _before_ reading the answer.
 > Answers are filled in only after your attempt has been checked.
 
 ---
 
 ## 0.1 — Async & the event loop
 
-**Gotcha:** `await` only helps while *waiting* on I/O — never during CPU work.
+**Gotcha:** `await` only helps while _waiting_ on I/O — never during CPU work.
 `time.sleep(5)` (or a heavy computation) inside `async def` freezes the whole
 server; `await asyncio.sleep(5)` does not.
 
@@ -23,7 +23,7 @@ moment to switch on, and nothing awaitable. Move it off the loop: threadpool
 
 ## 0.2 — Type hints & Pydantic
 
-**Gotcha:** Python ignores type hints at runtime — Pydantic reads and *enforces*
+**Gotcha:** Python ignores type hints at runtime — Pydantic reads and _enforces_
 them. Also: a field is optional only if it has a **default**, NOT because its type
 is `x | None`. `subtitle: str | None` is still REQUIRED; `subtitle: str | None = None`
 is optional.
@@ -64,7 +64,7 @@ schemas (`Create`, `Update`, `Response`). One class can't safely serve all three
 `BaseModel` → **request body**; (3) anything else (plain `int`/`str`/…) → **query**
 param. A param with a default is optional, without a default is required (path params
 are always required). Wrong type → automatic `422`, no validation code needed.
-Also: `global` is only for *reassigning* a module var inside a function; *mutating*
+Also: `global` is only for _reassigning_ a module var inside a function; _mutating_
 an object (`dict[k]=v`) needs no `global`, and you never write `global` at module level.
 
 **❓ Q:** For `@app.get("/documents/{doc_id}")` with the function
@@ -80,7 +80,7 @@ default makes it optional — NOT the `| None`). `limit` = **query**, **optional
 
 ## 1.2 — Request & response schemas
 
-**Gotcha:** Use a *family* of schemas, not one class: `Base` (shared) → `Create`
+**Gotcha:** Use a _family_ of schemas, not one class: `Base` (shared) → `Create`
 (what client sends, no server fields) → `Response` (what API returns, +id/timestamps).
 Server-generated fields (`id`, `word_count`, `created_at`) go in `Response` only, so
 clients can't set them. `response_model=` does 3 things: documents the output shape,
@@ -129,7 +129,7 @@ in their own file; write paths relative to the prefix (`""` → `/documents`, us
 not `"/"` to avoid a trailing-slash redirect). Mount with `app.include_router(...)` so
 `main.py` stays a thin assembler. Big lesson: **green lint ≠ working code** — ruff
 passed while a `word_Count` vs `word_count` typo broke the app, because the linter
-checks syntax/style, not logic. Only *running* the code (or a test) catches wiring bugs.
+checks syntax/style, not logic. Only _running_ the code (or a test) catches wiring bugs.
 (Also: debug by testing behavior — does the endpoint respond? — not internal attributes.)
 
 **❓ Q:** (1) What does a router `prefix` save you, and why does splitting into routers
@@ -286,7 +286,7 @@ INSERT; the Python object doesn't know them until reloaded. `refresh()` re-fetch
 **Gotcha:** A **transaction** = a group of DB ops that all succeed or all fail (**atomicity**,
 the "A" in ACID: Atomicity/Consistency/Isolation/Durability). `commit()` = make permanent &
 visible; `rollback()` = discard everything since BEGIN. Changes are **provisional until commit**
-— the `INSERT`/`UPDATE` SQL is only emitted at commit (the *flush*), so an error before commit
+— the `INSERT`/`UPDATE` SQL is only emitted at commit (the _flush_), so an error before commit
 means the DB never even saw it. The **session = unit of work**: tracks New (`add`→INSERT),
 Dirty (mutated attached objs→UPDATE), Deleted (`delete`→DELETE) and flushes them together in
 one transaction. That's why `update()` needs no `add()` — mutating a tracked object marks it
@@ -297,7 +297,7 @@ success→your commit persists; error before commit→session closes→rolled ba
 **❓ Q:** (1) In `update()`, no `session.add()` — how does SQLAlchemy know to emit an UPDATE?
 (2) Exception after `add()` but before `commit()` — is the row in the DB? Why?
 
-**A:** (1) Mutating an *attached* object marks it **dirty**; the unit-of-work sees the dirty
+**A:** (1) Mutating an _attached_ object marks it **dirty**; the unit-of-work sees the dirty
 object at `commit()` and emits the UPDATE. (2) No — every session runs in a transaction;
 without `commit()` the changes are provisional and roll back when the session closes on error
 (the INSERT is never even flushed).
@@ -307,7 +307,7 @@ without `commit()` the changes are provisional and roll back when the session cl
 ## 2.6 — Relationships (one-to-many)
 
 **Gotcha:** One-to-many needs two pieces: **FK column** (`owner_id: Mapped[int|None] =
-mapped_column(ForeignKey("users.id"), index=True)`) — the *stored* link, enforced by the DB —
+mapped_column(ForeignKey("users.id"), index=True)`) — the _stored_ link, enforced by the DB —
 and **`relationship()`** — Python-only navigation, NOT a stored column. `owner` (on Document,
 the "many" side) fetches the one User at access time via owner_id; `documents` (on User, the
 "one" side) is the list of that user's docs. `back_populates="..."` on both ends keeps them in
@@ -335,12 +335,12 @@ are `relationship()` attributes — not stored; navigable in Python, fetched at 
 - **Runtime vs compile/static time (Python):** Python has only a tiny compile step (syntax →
   bytecode; no name/type checks). `import`, `def`, `class` are **executable statements that run
   at RUNTIME**, top-to-bottom. Type hints are ignored at runtime — they exist only for **static
-  checkers** (mypy/IDE), a separate optional step *before* running. Three moments: bytecode-compile
+  checkers** (mypy/IDE), a separate optional step _before_ running. Three moments: bytecode-compile
   (syntax only) → static type-check (reads hints, optional) → runtime (imports run, hints ignored).
 
 - **Why circular imports crash (single-threaded!):** nothing loads "in parallel." Imports run
   sequentially, but Python caches a **half-initialized** module in `sys.modules` the moment it
-  starts loading. If A (mid-load) imports B, and B imports A, Python returns the *half-done* A —
+  starts loading. If A (mid-load) imports B, and B imports A, Python returns the _half-done_ A —
   the class isn't defined yet → `ImportError`. It's re-entrancy, not threads.
 
 - **How `if TYPE_CHECKING:` fixes it:** `TYPE_CHECKING` is `False` at runtime, so the block is
@@ -357,7 +357,7 @@ are `relationship()` attributes — not stored; navigable in Python, fetched at 
 
 - **Do we store both `owner` and `owner_id`? NO.** Only `owner_id` is a real DB column. `owner`
   is a `relationship()` — not stored; accessing `doc.owner` runs a query (`SELECT user WHERE
-  id=owner_id`) at that moment. `owner` is *derived* from `owner_id`. (This lazy "query on access"
+id=owner_id`) at that moment. `owner` is _derived_ from `owner_id`. (This lazy "query on access"
   is what causes N+1.)
 
 - **"many side" vs attribute direction (comment clarification):** two different labels — the
@@ -409,7 +409,7 @@ leak). Duplicate email → `EmailAlreadyExistsError` → 409. `scalar_one_or_non
 No migration needed (only app code, User table already existed).
 
 **❓ Q:** (1) Same password hashed twice → 2 different strings; how does `verify()` still return
-True? (2) Why a *slow* algorithm for passwords? (3) Why can't the hash leak in the response?
+True? (2) Why a _slow_ algorithm for passwords? (3) Why can't the hash leak in the response?
 
 **A:** (1) `verify()` reads the salt embedded in the stored hash, re-hashes the input with THAT
 salt (not a fresh one), and compares → same password reproduces the stored hash. (2) Slow +
@@ -427,10 +427,10 @@ through it, and it doesn't declare `hashed_password`, so that field is dropped o
   precomputed against it. Invisible to a real user logging in once.
 
 - **Problem 2: identical passwords → identical hashes.** With plain hashing, two users who pick
-  `"password123"` get the *same* hash → a leak reveals who shares passwords, and cracking one
+  `"password123"` get the _same_ hash → a leak reveals who shares passwords, and cracking one
   cracks all of them.
-  → **Fix B — salt**: a random value generated *per password*, mixed in before hashing. Now the
-  same password hashes *differently* for every user → kills rainbow tables (can't precompute for
+  → **Fix B — salt**: a random value generated _per password_, mixed in before hashing. Now the
+  same password hashes _differently_ for every user → kills rainbow tables (can't precompute for
   every possible salt) and hides shared passwords. The salt isn't secret — it's stored right in
   the hash string; its only job is to be **unique per password**.
 
@@ -470,13 +470,13 @@ overridable in tests — and it also hands you the authenticated user.
 
 **Doubts cleared this session:**
 
-- **How can I read a JWT payload with no secret?** Because reading = **base64 *decoding*, not decryption.**
+- **How can I read a JWT payload with no secret?** Because reading = **base64 _decoding_, not decryption.**
   base64 is just a reversible text encoding (for safe transport), no key involved. The JWT payload
-  is plain base64-encoded JSON — never hidden. Only the *signature* involves the secret.
+  is plain base64-encoded JSON — never hidden. Only the _signature_ involves the secret.
 
 - **SECRET_KEY vs SIGNATURE:** SECRET_KEY = secret string, **server-only, never in the token**, used
   to create & verify signatures. SIGNATURE = 3rd part of the JWT, **in the token, public**, computed
-  as `HMAC(header+payload, SECRET_KEY)`. You can *see* the signature but can't *reproduce* it without
+  as `HMAC(header+payload, SECRET_KEY)`. You can _see_ the signature but can't _reproduce_ it without
   the secret.
 
 - **If anyone can decode a JWT, what's the point of the secret?** The point isn't secrecy — it's
@@ -489,7 +489,7 @@ overridable in tests — and it also hands you the authenticated user.
 
 - **Why couldn't I decode a real token from another site?** It started with `U2FsdGVkX18` (= `Salted__`)
   → it's **AES-encrypted** (CryptoJS/OpenSSL), not a JWT. A JWT starts with `eyJ` (= `{"`) and has 2
-  dots (`header.payload.signature`). That site *encrypted* its token (contents hidden, needs key),
+  dots (`header.payload.signature`). That site _encrypted_ its token (contents hidden, needs key),
   vs a signed JWT (readable). Sign = integrity only; encrypt (JWE/AES) = also confidential. Not every
   "token" is a JWT.
 
@@ -554,8 +554,8 @@ the server; curl isn't a browser, so it ignores CORS entirely.
 **Gotcha:** Slow/heavy work (processing, embeddings, email, LLM calls) must NOT run in the request
 (Phase 0: blocks/slows). Offload it. Two tools: **`BackgroundTasks`** = in-process, after-response,
 light & disposable (no retries, dies with app) — for tiny fire-and-forget (email/log). **Celery** =
-distributed task queue for heavy/reliable/scalable work. Architecture: FastAPI *pushes* task →
-**broker (Redis)** holds the queue → **worker (separate process)** pulls & *runs* the code → writes
+distributed task queue for heavy/reliable/scalable work. Architecture: FastAPI _pushes_ task →
+**broker (Redis)** holds the queue → **worker (separate process)** pulls & _runs_ the code → writes
 result to **backend (Redis)**. **Redis never executes code** — it's the middleman queue + result
 store; the WORKER runs the task. `task.delay(args)` = serialize args to JSON, push to broker, return
 INSTANTLY with a task_id (doesn't wait). Poll `AsyncResult(id)` → status PENDING/STARTED/SUCCESS/
@@ -709,17 +709,17 @@ the end (can't display a live stream); `curl -N` flushes each chunk so you see t
 - **Why is `stream_reply`'s return type `AsyncIterator[str]` when it "returns" text?** Because it uses
   `yield`, not `return` — that makes it an **async generator**, not a normal function. Calling it gives
   you an async iterator you `async for` over; each iteration yields a `str`. `AsyncIterator[str]` types
-  *what you iterate to get* (a stream of strs), not a single returned str. `return x` = one value;
+  _what you iterate to get_ (a stream of strs), not a single returned str. `return x` = one value;
   `yield x` = many values over time. (`AsyncGenerator[str, None]` is the more specific equivalent.)
 
 - **Why is `current_user: CurrentUser` there if unused?** It's a **side-effect gate** — declaring it
   runs `get_current_user`, so no/invalid token → 401 before the body runs (requires login). Since we
-  don't read the value *yet*, the stricter form is `dependencies=[Depends(get_current_user)]` (like
+  don't read the value _yet_, the stricter form is `dependencies=[Depends(get_current_user)]` (like
   `rate_limit`); kept it as a param because 4.5 will use `current_user.id` (tie chat to the user).
   Rule: need the value → parameter; just need the gate → `dependencies=[...]`.
 
 - **How the stream flows API↔service (the line-by-line trace):** returning `StreamingResponse(gen())`
-  doesn't run the generator — Starlette *pulls* from it. `event_generator` `async for`s over
+  doesn't run the generator — Starlette _pulls_ from it. `event_generator` `async for`s over
   `stream_reply`, which `async for`s over Gemini. Each Gemini chunk → `stream_reply` `yield`s the text
   → `event_generator` `yield`s the SSE frame → Starlette flushes it to the socket → client sees it now.
   One chunk = one pass through both generators = one flush. Nothing buffered in the middle.
@@ -734,8 +734,8 @@ the end (can't display a live stream); `curl -N` flushes each chunk so you see t
   connection held open, body sent as `<hex-size>\r\n<data>\r\n` chunks, ending with `0\r\n\r\n`. ASGI:
   each `yield` → an `http.response.body` message with `more_body=True` → uvicorn writes+flushes a TCP
   chunk; the generator ending → `more_body=False` closes it. SSE = chunked HTTP with `text/event-stream`
-  + `data: ...\n\n` framing. Buffers (curl stdout, nginx, Swagger) hide the drip → `curl -N` / disable
-  proxy buffering.
+  - `data: ...\n\n` framing. Buffers (curl stdout, nginx, Swagger) hide the drip → `curl -N` / disable
+    proxy buffering.
 
 ---
 
@@ -761,3 +761,56 @@ task/input. (2) Prompt-asking may not comply (prose, code fences, malformed/miss
 brittle parsing that still breaks; `response_schema` enforces the shape at decode time → guaranteed
 valid JSON + a validated Pydantic object, no parsing. (3) `get_owned_document_or_404` (exists + owned →
 authz/404) and `rate_limit` (caps abuse of an expensive endpoint); also service layer + structured output.
+
+---
+
+## 4.4 — Production concerns (cost, errors, retries, timeouts)
+
+**Gotcha:** Robust LLM call = 4 concerns. (1) **Cost/tokens**: `response.usage_metadata`
+(`.prompt_token_count`/`.candidates_token_count`/`.total_token_count`) — log it. NOTE total can be >
+prompt+output because of **thinking tokens** (billed on total). (2) **Clean errors**: catch
+`google.genai.errors.APIError`, raise a domain `LLMError` → handler → **503** (don't leak provider
+stack traces; keeps error contract provider-independent — 1.5 pattern). (3) **Retry w/ exponential
+backoff**: retry only **transient** codes (429/500/503) with growing waits (`2**attempt` = 1s/2s/4s);
+**don't** retry 400/401/403 (client errors fail identically). Instant retry is harmful (slams the rate
+limit / piles onto an overloaded server). (4) **Timeout**: `async with asyncio.timeout(N)` so a hung
+call fails fast. Retry-loop control flow: 3 exits — `return` (success), `break` (permanent error → give
+up), loop-ends (retries exhausted); the bottom `raise LLMError from last_exc` runs only if we never
+returned. `tenacity` is the lib that does retry/backoff via a decorator. Logging gotcha: root logger
+defaults to WARNING → app `INFO` is filtered; `logging.basicConfig(level=INFO, force=True)` (force
+needed — uvicorn already configured logging).
+
+**❓ Q:** (1) Why retry 429/500 but `break` on 400/401/403? (2) What is exponential backoff + why not
+retry instantly? (3) Why raise `LLMError`→503 instead of letting the raw Google error propagate?
+
+**A:** (1) 4xx = your request is wrong → fails identically every retry (waste); 429/5xx = the service's
+transient state → often clears. (2) Growing waits (1s→2s→4s) between retries; instant retry slams the
+rate limit / adds load to an overloaded server — backoff gives it time to recover. (3) Don't leak
+provider internals; map to correct HTTP semantics (503 = transient, retry later) in one handler; and
+decouple your error contract from the provider (swap Gemini→Claude, callers still just see LLMError/503).
+
+---
+
+## 4.5 — Grounded document Q&A (Phase 4 finale)
+
+**Gotcha:** **Grounding** = put the document's content INTO the prompt + a system instruction ("answer
+ONLY from the provided document; if not there, say so; no outside knowledge") + the user's question →
+the answer is grounded in YOUR data, not the model's training. Makes it **trustworthy**: no
+hallucination (constrained + admits when unknown), works on private data the model never saw (in real
+RAG also + citations). This is **RAG-lite / context-stuffing**: `POST /documents/{id}/ask` composes
+owned-doc dep + rate_limit + service. **Limitation that motivates Phase 5:** stuffing the WHOLE doc
+doesn't scale — large docs exceed the context window; can't stuff many docs; you pay for the whole doc
+EVERY query; irrelevant text hurts quality. Phase 5 fix = **retrieve only the relevant chunks**
+(embeddings + vector search) instead of stuffing everything. Refactor lesson: extracted the robust
+`generate()` wrapper (timeout/retry/backoff/usage-log/LLMError) into `app/core/llm.py` so ALL services
+(chat/analyze/qa) share it (DRY) — streaming excluded (can't cleanly retry a started stream). Consistent
+typos (`analyze_document`) RUN but hurt readability — rename def+callsite together.
+
+**❓ Q:** (1) What is grounding + why does it make Cortex trustworthy vs a plain chatbot? (2) Your `/ask`
+stuffs the whole doc in the prompt — one reason that won't scale, and what Phase 5 does instead?
+
+**A:** (1) Grounding narrows the answer space to the provided document (+ "say if not found"), so it
+answers from YOUR data accurately, can't hallucinate, and admits when it doesn't know — vs a chatbot
+that answers vaguely from training and confidently makes things up. (2) A large doc won't fit the
+context window (also: many docs / cost per query / noise hurts quality); Phase 5 retrieves only the
+relevant chunks (embeddings + vector search) and stuffs just those.

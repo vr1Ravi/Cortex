@@ -12,7 +12,9 @@ from app.models.document import Document
 from app.repositories import document as document_repo
 from app.schemas.analysis import DocumentAnalysis
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
+from app.schemas.qa import AskRequest, AskResponse
 from app.services import analysis as analysis_service
+from app.services import qa as qa_service
 
 MAX_UPLOAD_BYTES = 1_000_000   # 1 MB
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -120,4 +122,14 @@ async def analyze_document(
     doc: Annotated[Document, Depends(get_owned_document_or_404)],
 ) -> DocumentAnalysis:
      """AI-analyze one of the user's documents into structured data."""
-     return await analysis_service.analyze_documnet(doc.content)
+     return await analysis_service.analyze_document(doc.content)
+
+
+@router.post("/{doc_id}/ask", response_model=AskResponse, dependencies=[Depends(rate_limit)])
+async def ask_document(
+    body: AskRequest,
+    doc: Annotated[Document, Depends(get_owned_document_or_404)],
+) -> AskResponse:
+    """Ask a question about one of your documents — answered from its content."""
+    answer = await qa_service.answer_from_document(body.question, doc.content)
+    return AskResponse(answer=answer)

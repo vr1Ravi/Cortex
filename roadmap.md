@@ -84,8 +84,8 @@
 - [x] **4.1** Calling the **Gemini API** from the backend (`google-genai`, async, messages) _(DONE)_
 - [x] **4.2** **Streaming** tokens to the client over SSE _(DONE)_
 - [x] **4.3** Prompt design + **structured outputs** (system instruction, `response_schema`) _(DONE)_
-- [ ] **4.4** Production concerns: token/cost handling, retries, timeouts, error handling
-- [ ] **4.5** Wire real AI chat into Cortex
+- [x] **4.4** Production concerns: token/cost handling, retries, timeouts, error handling _(DONE)_
+- [x] **4.5** Wire AI into Cortex — grounded document Q&A (RAG-lite) _(DONE)_ **← Phase 4 COMPLETE**
 
 ### Phase 5 — RAG + LangChain · 8 sessions
 
@@ -185,5 +185,9 @@
 | 2026-07-18 | 4.2 Streaming LLM over SSE | Done. `chat.py` service `stream_reply` async generator (`async for chunk in await gemini.aio...generate_content_stream`, `yield chunk.text`); `POST /chat/stream` endpoint `event_generator` → `data: {json.dumps(token)}\n\n` + `[DONE]` via `StreamingResponse`. Verified drip via `curl -N` (server relays 2 streams: `async for` in ← Gemini, `yield` out → client). Deep-dived chunked transfer encoding / ASGI more_body / buffering. Gotcha: looked "all at once" in `/docs` (Swagger can't render SSE) — use `curl -N`. |
 
 | 2026-07-18 | 4.3 Prompt design + structured output | Done. Added `system_instruction` (Cortex persona) via `types.GenerateContentConfig`. Structured output: `app/schemas/analysis.py` `DocumentAnalysis`, `app/services/analysis.py` (`response_schema=DocumentAnalysis` → `response.parsed`), `POST /documents/{id}/analyze` (composes owned-doc dep + rate_limit + service). Verified: analyzed a real doc → clean validated JSON {summary, tags[], key_points[]}. Learned system vs user message, why schema-enforced output beats prompt-and-parse. |
+
+| 2026-07-19 | 4.4 Production concerns | Done. `chat.py` `_generate` wrapper: `asyncio.timeout(30)` + retry loop (transient 429/500/503, exponential backoff `2**attempt`, break on 4xx) → `LLMError` on failure; `generate_reply` logs `usage_metadata`. `LLMError` domain exception + 503 handler. `logging.basicConfig(level=INFO, force=True)` in main.py. Verified: token log shows (total>prompt+output due to thinking tokens). Learned retry control-flow (return/break/loop-end), backoff, provider-error decoupling. |
+
+| 2026-07-19 | 4.5 Grounded doc Q&A (finale) | Done. `app/schemas/qa.py` (AskRequest/AskResponse), `app/services/qa.py` (`answer_from_document` — stuffs doc + grounding system instruction), `POST /documents/{id}/ask` (owned-doc + rate_limit). Verified: grounded answer from a real doc; refuses out-of-doc questions. **Refactored** robust `generate()` wrapper into `app/core/llm.py` — chat/analyze/qa all share it (DRY, user's own catch). Learned grounding/trustworthiness + the stuffing limitation → Phase 5 RAG. **PHASE 4 COMPLETE (4.1–4.5).** Minor: consistent typos `analyze_document`/`answer_from_document` (run fine; optional rename). |
 
 _(We'll tick boxes above and add rows here as we go.)_

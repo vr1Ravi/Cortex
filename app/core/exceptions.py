@@ -21,3 +21,6 @@ class EmailAlreadyExistsError(CortexError):
     def __init__(self, email: str) -> None:
         self.email = email
         super().__init__(f"Email {email} is already registered")
+
+class LLMError(CortexError):
+    """Raised when the AI provider fails (after retries)."""

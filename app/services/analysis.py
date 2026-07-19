@@ -2,14 +2,12 @@
 
 from google.genai import types
 
-from app.core.config import settings
-from app.core.llm import gemini
+from app.core.llm import generate
 from app.schemas.analysis import DocumentAnalysis
 
 
-async def analyze_documnet(content: str) -> DocumentAnalysis:
-    response = await gemini.aio.models.generate_content(
-        model=settings.gemini_model,
+async def analyze_document(content: str) -> DocumentAnalysis:
+    response = await generate(
         contents=f"Analyze the following document:\n\n{content}",
         config=types.GenerateContentConfig(
             system_instruction=(

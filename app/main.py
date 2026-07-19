@@ -6,18 +6,25 @@ Run the dev server from the project root:
 
 import time
 
+# import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import auth, chat, demo, documents, tasks, users
-from app.core.exceptions import DocumentNotFoundError, EmailAlreadyExistsError
+from app.core.exceptions import DocumentNotFoundError, EmailAlreadyExistsError, LLMError
 
 app = FastAPI(
     title="Cortex",
     description="AI Knowledge Assistant — upload documents and chat with them.",
     version="0.1.0",
 )
+
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+#     force=True,
+# )
 
 # --- CORS: allow your future frontend to call the API from the browser ---
 app.add_middleware(
@@ -56,9 +63,17 @@ async def document_not_found_handler(request: Request, exc: DocumentNotFoundErro
 async def email_exists_handler(request: Request, exc: EmailAlreadyExistsError) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
-
+@app.exception_handler(LLMError)
+async def llm_error_handler(request: Request, exc: LLMError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "The AI service is temporarily unavailable. Please try again."
+        }
+    )
 # --- Endpoints ---
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Liveness check — confirms the API is up."""
     return {"status": "ok"}
+
