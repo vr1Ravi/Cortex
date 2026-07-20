@@ -89,8 +89,8 @@
 
 ### Phase 5 — RAG + LangChain · 8 sessions
 
-- [ ] **5.1** Embeddings — what they are, how similarity search works
-- [ ] **5.2** Chunking strategies (size, overlap, semantic) + trade-offs
+- [x] **5.1** Embeddings — what they are, how similarity search works _(DONE)_
+- [x] **5.2** Chunking strategies (size, overlap, semantic) + trade-offs _(DONE)_
 - [ ] **5.3** Vector DBs — **pgvector** setup & queries (+ Chroma overview)
 - [ ] **5.4** Retrieval — top-k, filtering, hybrid search, reranking
 - [ ] **5.5** The full **RAG pipeline** end-to-end (ingest → retrieve → generate + citations)
@@ -189,5 +189,9 @@
 | 2026-07-19 | 4.4 Production concerns | Done. `chat.py` `_generate` wrapper: `asyncio.timeout(30)` + retry loop (transient 429/500/503, exponential backoff `2**attempt`, break on 4xx) → `LLMError` on failure; `generate_reply` logs `usage_metadata`. `LLMError` domain exception + 503 handler. `logging.basicConfig(level=INFO, force=True)` in main.py. Verified: token log shows (total>prompt+output due to thinking tokens). Learned retry control-flow (return/break/loop-end), backoff, provider-error decoupling. |
 
 | 2026-07-19 | 4.5 Grounded doc Q&A (finale) | Done. `app/schemas/qa.py` (AskRequest/AskResponse), `app/services/qa.py` (`answer_from_document` — stuffs doc + grounding system instruction), `POST /documents/{id}/ask` (owned-doc + rate_limit). Verified: grounded answer from a real doc; refuses out-of-doc questions. **Refactored** robust `generate()` wrapper into `app/core/llm.py` — chat/analyze/qa all share it (DRY, user's own catch). Learned grounding/trustworthiness + the stuffing limitation → Phase 5 RAG. **PHASE 4 COMPLETE (4.1–4.5).** Minor: consistent typos `analyze_document`/`answer_from_document` (run fine; optional rename). |
+
+| 2026-07-19 | 5.1 Embeddings | Done. Concept lab (`scratch_embeddings.py`, deleted): embedded sentences via `gemini.aio.models.embed_content(model="gemini-embedding-001")` (3072-dim), computed cosine → related pairs 0.80/0.74 vs unrelated ~0.57. User grokked it deeply: embedding = coordinates of text as a point in N-dim meaning space; similar meaning = nearby points; cosine = angle; retrieval = nearest-neighbor. Key lesson: scores uncalibrated (unrelated≈0.57) → use top-K ranking, not a fixed threshold. |
+
+| 2026-07-20 | 5.2 Chunking | Done. `app/services/chunking.py` `chunk_text(text, chunk_size=800, overlap=150)` (fixed-size char chunks, `start += chunk_size - overlap`). Verified via scratch (deleted): 288 chars → 4 chunks with visible overlap. Learned why chunk (blurry-average whole-doc vector, input limits, stuff-only-relevant), size trade-off, overlap purpose, and that char-based cuts mid-word → boundary-aware/recursive splitting is the upgrade (5.6). |
 
 _(We'll tick boxes above and add rows here as we go.)_

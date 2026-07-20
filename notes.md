@@ -814,3 +814,81 @@ answers from YOUR data accurately, can't hallucinate, and admits when it doesn't
 that answers vaguely from training and confidently makes things up. (2) A large doc won't fit the
 context window (also: many docs / cost per query / noise hurts quality); Phase 5 retrieves only the
 relevant chunks (embeddings + vector search) and stuffs just those.
+
+---
+
+## 5.1 — Embeddings (foundation of RAG)
+
+**Gotcha:** An **embedding** = a trained function `text → vector` (a point in an N-dim "meaning space";
+768 for text-embedding-004, 3072 for gemini-embedding-001 — fixed size so all texts are comparable).
+Key property: **similar meaning → nearby points** (semantic, not keyword — "cat"/"kitten" are close with
+0 shared words). Each dimension is a learned, non-interpretable feature; meaning is distributed across
+all of them. The array = the text's **coordinates**; the whole corpus = a cloud of points that clusters
+by meaning. **Cosine similarity** = angle between two vectors' arrows: `dot(a,b)/(|a||b|)` → 1 same
+direction (similar), 0 perpendicular (unrelated), -1 opposite; dividing by magnitudes ignores length,
+compares pure direction (works in any # of dims). Semantic search / retrieval = embed the query → find
+nearest points (nearest-neighbor). **CRUCIAL: scores aren't calibrated** — unrelated text sits ~0.5–0.6,
+not 0, and the scale shifts by model/domain → a fixed threshold (`>0.9`) is fragile (matches nothing or
+everything). **Rank by similarity and take top-K** (relative order is reliable, absolute value isn't).
+Gemini: `await gemini.aio.models.embed_content(model=..., contents=[...])` → `.embeddings[i].values`.
+
+**❓ Q:** (1) What does an embedding turn text into + the property that makes semantic search work?
+(2) How does cosine similarity find relevant docs? (3) Why is a fixed similarity threshold wrong —
+what do you do instead?
+
+**A:** (1) A fixed-length vector (a point in meaning-space); property = similar meaning lands at nearby
+points (keyword search can't do that). (2) Embed the query, cosine it against each doc's vector, take
+the highest (angle-based: 1 similar, 0 unrelated). (3) Absolute scores aren't calibrated (unrelated
+≈0.57, scale varies by model/domain) so a fixed threshold matches nothing or everything; sort by
+similarity and take the **top-K nearest** — relative ranking is reliable.
+
+**Doubts cleared this session:**
+
+- **Why 768/3072 numbers?** It's the embedding **model's fixed output size** (a design choice — its
+  final layer has that many outputs). Fixed so every text (a word or a whole book) → the same-length
+  vector, which is required to compare them. More dims = more capacity to encode nuance, but more
+  storage/compute. Each number is a **learned, non-interpretable feature** — meaning is spread across
+  all of them (you can't point at "dimension 5 = animalness").
+
+- **How does text become those numbers?** Run through a **trained neural net** (transformer):
+  tokenize → transformer layers (attention) build contextual meaning → **pool** into one fixed vector.
+  The numbers are meaningful because of **training**: the model was trained on billions of pairs to
+  "put similar-meaning text at nearby points" (contrastive learning). So it's a learned function
+  `text → vector`; you don't program the rules, the model learned them. (Don't need transformer
+  internals to *use* it.)
+
+- **The big click — it's a vector space:** 768/3072 = the number of **dimensions** of a "meaning
+  space"; the array = the text's **coordinates** (a point) in that space. Same as `[x,y]` (2D) or
+  `[x,y,z]` (3D), just more axes. The whole corpus = a cloud of points that **clusters by meaning**;
+  retrieval = "find the nearest points to the query point" (nearest-neighbor). pgvector's whole job
+  (5.3) = store these points + find nearest ones fast.
+
+- **How cosine works (math):** each vector = an arrow from the origin; cosine = how **aligned** two
+  arrows are (the angle), ignoring length. `cos = dot(a,b) / (|a|·|b|)` — dot product is big when they
+  point together; dividing by magnitudes (`√Σx²`) strips length so only *direction* counts. 1 = same
+  direction (0°), 0 = perpendicular (90°), -1 = opposite. Works identically in 3072-D even though we
+  can't picture it. 2D check: `[1,1]` vs `[2,2]` → cos = 1 (same direction, length ignored).
+
+---
+
+## 5.2 — Chunking
+
+**Gotcha:** Split docs into **chunks** before embedding because: (1) embedding input limits, (2) a
+whole-doc vector is a **blurry average** → won't match a specific question; small chunks each hold one
+idea → precise match, (3) you stuff only the relevant chunk (the 4.5 problem). **Chunk size** trade-off:
+too big = blurry/imprecise match + noise + cost; too small = lost context + more chunks to store/search.
+Sweet spot ≈ a few hundred tokens. **Overlap** = consecutive chunks share boundary text so an idea at
+the seam survives whole in at least one chunk. Fixed-size-with-overlap util: window advances by
+`start += chunk_size - overlap` (moves less than a full chunk → re-includes the previous tail).
+Char-based (~4 chars/token) is simple but **cuts mid-word/sentence** (saw "Al", "rat", "retri");
+boundary-aware/recursive splitting (paragraph→sentence, LangChain 5.6) is cleaner. Later: store each
+chunk with source doc id + position for citations.
+
+**❓ Q:** (1) Why chunk instead of embedding the whole doc? (2) What does overlap prevent + which line
+creates it? (3) Chunk size too big vs too small?
+
+**A:** (1) A whole-doc vector is a blurry average of all its ideas → won't strongly match a specific
+question; small chunks match precisely (also: input limits, stuff-only-relevant). (2) Prevents an
+idea/sentence at a chunk boundary from being split so neither chunk captures it; `start += chunk_size -
+overlap` (advance by less than a full chunk). (3) Too big → imprecise/blurry match + noise + cost; too
+small → lost context + more chunks to store/search.
