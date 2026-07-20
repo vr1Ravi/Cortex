@@ -14,6 +14,7 @@ from app.schemas.analysis import DocumentAnalysis
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
 from app.schemas.qa import AskRequest, AskResponse
 from app.services import analysis as analysis_service
+from app.services import ingestion as ingestion_service
 from app.services import qa as qa_service
 
 MAX_UPLOAD_BYTES = 1_000_000   # 1 MB
@@ -133,3 +134,11 @@ async def ask_document(
     """Ask a question about one of your documents — answered from its content."""
     answer = await qa_service.answer_from_document(body.question, doc.content)
     return AskResponse(answer=answer)
+
+@router.post("/{doc_id}/ingest", dependencies=[Depends(rate_limit)])
+async def ingest_document(
+    session: SessionDep,
+    doc: Annotated[Document, Depends(get_owned_document_or_404)]
+) -> dict:
+    count = await ingestion_service.insert_document(session, doc.id, doc.content)
+    return {"document_id": doc.id, "chunks_created": count}

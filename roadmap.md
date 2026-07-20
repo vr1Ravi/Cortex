@@ -91,7 +91,7 @@
 
 - [x] **5.1** Embeddings — what they are, how similarity search works _(DONE)_
 - [x] **5.2** Chunking strategies (size, overlap, semantic) + trade-offs _(DONE)_
-- [ ] **5.3** Vector DBs — **pgvector** setup & queries (+ Chroma overview)
+- [x] **5.3** Vector DB — **pgvector** setup, `document_chunks` table, ingestion pipeline _(DONE)_
 - [ ] **5.4** Retrieval — top-k, filtering, hybrid search, reranking
 - [ ] **5.5** The full **RAG pipeline** end-to-end (ingest → retrieve → generate + citations)
 - [ ] **5.6** **LangChain / LangGraph** — chains, orchestration
@@ -193,5 +193,7 @@
 | 2026-07-19 | 5.1 Embeddings | Done. Concept lab (`scratch_embeddings.py`, deleted): embedded sentences via `gemini.aio.models.embed_content(model="gemini-embedding-001")` (3072-dim), computed cosine → related pairs 0.80/0.74 vs unrelated ~0.57. User grokked it deeply: embedding = coordinates of text as a point in N-dim meaning space; similar meaning = nearby points; cosine = angle; retrieval = nearest-neighbor. Key lesson: scores uncalibrated (unrelated≈0.57) → use top-K ranking, not a fixed threshold. |
 
 | 2026-07-20 | 5.2 Chunking | Done. `app/services/chunking.py` `chunk_text(text, chunk_size=800, overlap=150)` (fixed-size char chunks, `start += chunk_size - overlap`). Verified via scratch (deleted): 288 chars → 4 chunks with visible overlap. Learned why chunk (blurry-average whole-doc vector, input limits, stuff-only-relevant), size trade-off, overlap purpose, and that char-based cuts mid-word → boundary-aware/recursive splitting is the upgrade (5.6). |
+
+| 2026-07-20 | 5.3 pgvector + ingestion | Done. Swapped Docker image → `pgvector/pgvector:pg16`; installed `pgvector`; `app/models/chunk.py` `DocumentChunk` (Vector(768), owner-cascade FK); migration (manual `CREATE EXTENSION vector` + `Vector` import fix). Embeddings settings (gemini-embedding-001, dim 768). `embed_texts` (task_type RETRIEVAL_DOCUMENT) + `ingest_document` (chunk→embed→store, idempotent delete-first) + `POST /documents/{id}/ingest`. Ingested doc 3 → **62 chunks, 62 vectors, 768-dim** in pgvector. Refactored (user's catch) `_resilient` generic wrapper for both generate + embed. Hit real 429 (embed 100/min free limit — 62 chunks/ingest × retries) → lesson: throttle + Celery for ingestion. Bugs: FK `document`→`documents`, migration Vector import. |
 
 _(We'll tick boxes above and add rows here as we go.)_

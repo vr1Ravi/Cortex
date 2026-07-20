@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16
+    image: pgvector/pgvector:pg16 # was: postgres:16 — this one bundles the vector extension
     container_name: cortex-postgres
     environment:
       POSTGRES_USER: cortex

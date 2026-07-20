@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     google_api_key: str
     gemini_model: str = "gemini-2.0-flash"
 
+    # Embeddings
+    embedding_model: str = "gemini-embedding-001"
+    embedding_dim: int = 768  
+    #request 768-dim vectors (indexable; pgvector indexes cap at 2000 dims)
+
 
 
 @lru_cache

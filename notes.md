@@ -892,3 +892,55 @@ question; small chunks match precisely (also: input limits, stuff-only-relevant)
 idea/sentence at a chunk boundary from being split so neither chunk captures it; `start += chunk_size -
 overlap` (advance by less than a full chunk). (3) Too big → imprecise/blurry match + noise + cost; too
 small → lost context + more chunks to store/search.
+
+---
+
+## 5.3 — pgvector (vector DB) & ingestion
+
+**Gotcha:** **pgvector** = Postgres extension adding a **`vector(N)`** column type + distance operators
+(`<=>` cosine, `<->` L2, `<#>` inner product) + ANN indexes. Use it over a separate vector DB
+(Pinecone/Chroma) because vectors sit **alongside relational data** (JOIN/filter by owner,
+transactional, one DB, zero extra infra) — dedicated DBs only win at huge scale. Setup: Docker image
+`pgvector/pgvector:pg16` (same PG16 → volume compatible; expect a harmless collation warning →
+`ALTER DATABASE .. REFRESH COLLATION VERSION`), `pip install pgvector`, model col
+`embedding: Mapped[list[float]] = mapped_column(Vector(dim))`. **Migration gotchas:** add
+`op.execute("CREATE EXTENSION IF NOT EXISTS vector")` FIRST in upgrade() (autogen won't), and fix the
+autogen import to `from pgvector.sqlalchemy import Vector` + `Vector(dim=768)`. **Dim = 768** (not
+3072) because pgvector ANN indexes cap at 2000 dims; Gemini `output_dimensionality=768`. FK string uses
+`__tablename__` ("documents") not the class. **Ingestion pipeline = chunk → embed → store** (idempotent:
+delete old chunks first). `task_type`: RETRIEVAL_DOCUMENT for stored chunks, RETRIEVAL_QUERY for queries
+(asymmetric → better retrieval). **Rate-limit reality:** a big doc = a burst of embed requests (doc =
+39.9k chars → 62 chunks → 62 requests/ingest; free tier 100/min) → ingestion must be **throttled +
+run in Celery** (3.5) so it doesn't blow limits or block/timeout the request. Extracted generic
+`_resilient(call, what)` so both `generate()` and `embed()` get timeout+retry+LLMError.
+
+**❓ Q:** (1) What does pgvector add + why over a separate vector DB? (2) The 3 ingestion steps?
+(3) Why does one big doc risk the rate limit + the production fix?
+
+**A:** (1) A `vector` column type + distance operators for nearest-neighbor search; use it because
+vectors live beside relational data (JOIN/filter/transactional, one DB, no extra infra) — separate DBs
+only win at scale. (2) chunk → embed → store (delete-first = idempotent). (3) A big doc → many chunks →
+the calls and doesn't block/timeout the HTTP request.
+
+**Doubts cleared this session:**
+
+- **What is `chunk_index`?** The ordinal position of a chunk within its document (0,1,2,… — the `i`
+  from `enumerate`). Store it for: **order** (DB rows come back unordered → `ORDER BY chunk_index` to
+  restore reading order), **traceability/citations** ("answer from chunk 2 of doc 5"), and debugging.
+  Just bookkeeping: which slice, in what order.
+
+- **How does `ondelete="CASCADE"` delete all entries?** It's a **DB-level** rule on the FK, enforced by
+  Postgres. Normally a FK blocks deleting a parent that still has children (would orphan them). `ondelete`
+  says what to do to children when the parent is deleted: default `RESTRICT`/`NO ACTION` = block;
+  **`CASCADE`** = auto-delete the children too; `SET NULL` = null their FK. So `DELETE FROM documents
+  WHERE id=5` makes Postgres also run `DELETE FROM document_chunks WHERE document_id=5` — no orphans, no
+  manual cleanup, no app code. Right here because chunks are meaningless without their document. (Per-
+  relationship judgment: does the child make sense without the parent? If yes, don't cascade.)
+
+- **Why not reuse the `generate()` wrapper for embeddings?** Because `generate()` is hard-wired to
+  `generate_content` (chat); embeddings use a different method (`embed_content`) with a different
+  response shape. The RESILIENCE (timeout/retry/backoff/LLMError) isn't chat-specific, so the fix is to
+  extract a **generic `_resilient(call, what)`** helper and build both `generate()` and `embed()` on it.
+  Pass a **`lambda:` factory** (not the coroutine object) so `_resilient` can create a FRESH coroutine
+  per retry — a coroutine can only be awaited once. (Caveat: the wrapper's short retries beat transient
+  blips, NOT a sustained 100/min rate limit — that needs throttling/Celery.)

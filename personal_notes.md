@@ -84,3 +84,9 @@ Data store / server — it runs as a separate server (your cortex-redis containe
 
 * Need the value? → make it a parameter (current_user: CurrentUser).
   Just need the gate, don't use the value? → put it in dependencies=[...]
+
+* RAG = Retrieval-Augmented Generation.
+
+* The RAG idea: Instead of stuffing everything in, you retrieve only the few most relevant pieces for a given question, and hand those to the LLM as context. The model then generates an answer grounded in your actual data.
+
+* Why 768 and not 3072? gemini-embedding-001 defaults to 3072, but pgvector's ANN indexes only support up to 2000 dimensions. We'll ask Gemini for 768-dim vectors (it supports output_dimensionality) — smaller, faster, indexable, and plenty accurate. Cosine search (<=>) works fine without manual normalization.
