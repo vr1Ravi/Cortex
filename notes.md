@@ -969,3 +969,27 @@ similar, and why ORDER BY ASC LIMIT k? (3) Why join documents + filter owner_id?
 retrieval. (2) Lower = more similar (distance = 1−similarity); ORDER BY ascending puts closest first,
 LIMIT k takes the top-K nearest. (3) Without the owner filter, search spans ALL users' chunks → user A
 could retrieve user B's private content (multi-tenant data leak); the filter scopes it to the caller.
+
+---
+
+## 5.5 — The full RAG pipeline
+
+**Gotcha:** **RAG = Retrieve → Augment → Generate.** Retrieve top-k relevant chunks (5.4) → augment:
+stuff ONLY those into the prompt as labelled context (`[source doc:chunk]`) + grounding system
+instruction ("answer only from context, cite sources, say if not found, no outside knowledge") →
+generate. Return answer **+ citations** (which chunks) = trust/verifiability. Fixes 4.5's whole-doc
+stuffing: retrieves relevant chunks across ALL docs → scales to any size + cited. **"Retrieved ≠ used"
+trap:** top-K ALWAYS returns k chunks (relative ranking, 5.1), so an off-topic query still returns the
+"least-far" chunks → don't blindly cite them. Fix: a **relevance floor** (`dist <= MAX_DISTANCE`); if
+nothing passes → "not found", NO citations, and skip the LLM call (saves cost). Floor is a heuristic
+(5.1: scores uncalibrated) — tune per data, combine with top-K. Gold-standard citation: have the LLM
+report which sources it USED via structured output (4.3), cite only those.
+
+**❓ Q:** (1) The three RAG steps? (2) How does this fix 4.5's whole-doc stuffing? (3) Why did off-topic
+queries still return citations before the fix?
+
+**A:** (1) Retrieve (top-k relevant chunks) → Augment (stuff them + grounding into the prompt) →
+Generate (LLM answers from that context). (2) It retrieves only the RELEVANT chunks across all docs
+instead of stuffing one whole doc → scales past the context window + returns citations. (3) top-K
+always returns the k nearest chunks even for an irrelevant query (relative ranking, not a threshold),
+and we cited all retrieved chunks — but "retrieved ≠ used"; the relevance floor + short-circuit fixes it.

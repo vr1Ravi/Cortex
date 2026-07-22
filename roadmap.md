@@ -93,7 +93,7 @@
 - [x] **5.2** Chunking strategies (size, overlap, semantic) + trade-offs _(DONE)_
 - [x] **5.3** Vector DB — **pgvector** setup, `document_chunks` table, ingestion pipeline _(DONE)_
 - [x] **5.4** Retrieval — nearest-neighbor search (cosine, top-k, owner-scoped) _(DONE)_
-- [ ] **5.5** The full **RAG pipeline** end-to-end (ingest → retrieve → generate + citations)
+- [x] **5.5** The full **RAG pipeline** end-to-end (retrieve → augment → generate + citations) _(DONE)_
 - [ ] **5.6** **LangChain / LangGraph** — chains, orchestration
 - [ ] **5.7** **RAG evaluation** — measuring answer quality, faithfulness
 - [ ] **5.8** Building an **agent** with tools (function calling loop)
@@ -197,5 +197,7 @@
 | 2026-07-20 | 5.3 pgvector + ingestion | Done. Swapped Docker image → `pgvector/pgvector:pg16`; installed `pgvector`; `app/models/chunk.py` `DocumentChunk` (Vector(768), owner-cascade FK); migration (manual `CREATE EXTENSION vector` + `Vector` import fix). Embeddings settings (gemini-embedding-001, dim 768). `embed_texts` (task_type RETRIEVAL_DOCUMENT) + `ingest_document` (chunk→embed→store, idempotent delete-first) + `POST /documents/{id}/ingest`. Ingested doc 3 → **62 chunks, 62 vectors, 768-dim** in pgvector. Refactored (user's catch) `_resilient` generic wrapper for both generate + embed. Hit real 429 (embed 100/min free limit — 62 chunks/ingest × retries) → lesson: throttle + Celery for ingestion. Bugs: FK `document`→`documents`, migration Vector import. |
 
 | 2026-07-21 | 5.4 Retrieval | Done. `app/services/retrieval.py` `retrieve_chunks(session, query, owner_id, k)` — embed query (RETRIEVAL_QUERY) → `select(DocumentChunk, cosine_distance.label('distance')).join(Document).where(owner_id).order_by(distance).limit(k)`. `app/schemas/search.py` (SearchRequest/SearchResult), `POST /documents/search`. Verified: "fix N+1?" → N+1 chunks ranked by distance (0.255/0.283/0.287) — semantic match, not keywords. Learned cosine_distance builds SQL (not Python), lower=more similar, owner-scope = multi-tenant safety. Bugs: `{}` vs `()` around stmt; SearchRequest vs SearchResult in response_model. |
+
+| 2026-07-23 | 5.5 Full RAG pipeline | Done. `app/services/rag.py` `answer_with_rag` (RETRIEVE top-k → relevance floor MAX_DISTANCE=0.45 → AUGMENT: stuff chunks w/ `[source doc:chunk]` labels + grounding system instruction → GENERATE via `generate()`) → returns (answer, chunks). `app/schemas/rag.py` (RagRequest/Citation/RagResponse), `app/api/rag.py` `POST /rag/ask`. Verified: relevant Q → grounded cited answer across docs; off-topic → "not found" + no citations (+ no LLM call). **Core RAG loop complete.** User caught "retrieved ≠ used" (phantom citations) → added relevance floor + short-circuit. Noted gold-standard: LLM reports used sources via structured output. |
 
 _(We'll tick boxes above and add rows here as we go.)_
