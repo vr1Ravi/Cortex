@@ -944,3 +944,28 @@ the calls and doesn't block/timeout the HTTP request.
   Pass a **`lambda:` factory** (not the coroutine object) so `_resilient` can create a FRESH coroutine
   per retry — a coroutine can only be awaited once. (Caveat: the wrapper's short retries beat transient
   blips, NOT a sustained 100/min rate limit — that needs throttling/Celery.)
+
+---
+
+## 5.4 — Retrieval (nearest-neighbor search)
+
+**Gotcha:** Retrieval = embed the query (`task_type="RETRIEVAL_QUERY"` — asymmetric with the chunks'
+`RETRIEVAL_DOCUMENT`; roles are embedded to align → better matches) → nearest-neighbor search in
+pgvector. `distance = DocumentChunk.embedding.cosine_distance(query_vec).label("distance")` builds a
+**SQL expression** (`embedding <=> :vec AS distance`), NOT a Python number — Postgres computes it per
+row at query time. `select(DocumentChunk, distance).join(Document).where(Document.owner_id == owner_id)
+.order_by(distance).limit(k)`. **Cosine DISTANCE: lower = more similar** (0 identical; = 1−similarity),
+so ORDER BY ASC + LIMIT k = top-K nearest. **MUST scope to the user** (join documents, filter owner_id)
+or user A's query leaks user B's private chunks (multi-tenant breach). `result.all()` → (chunk, dist)
+rows. SQLAlchemy build vs run: `select().join()...` constructs SQL; `await session.execute(stmt)` runs
+it. Char-chunking's mid-word cuts (5.2) are visible in results but retrieval still works. Bugs seen:
+`{...}` (set) vs `(...)` (grouping) around the stmt; `response_model=list[SearchRequest]` vs `SearchResult`
+(response_model overrides the return annotation).
+
+**❓ Q:** (1) Why embed the query as RETRIEVAL_QUERY? (2) Cosine distance — lower or higher = more
+similar, and why ORDER BY ASC LIMIT k? (3) Why join documents + filter owner_id?
+
+**A:** (1) task_type tells Gemini the text's role (query vs document) so they embed to align → better
+retrieval. (2) Lower = more similar (distance = 1−similarity); ORDER BY ascending puts closest first,
+LIMIT k takes the top-K nearest. (3) Without the owner filter, search spans ALL users' chunks → user A
+could retrieve user B's private content (multi-tenant data leak); the filter scopes it to the caller.

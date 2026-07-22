@@ -13,9 +13,11 @@ from app.repositories import document as document_repo
 from app.schemas.analysis import DocumentAnalysis
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
 from app.schemas.qa import AskRequest, AskResponse
+from app.schemas.search import SearchRequest, SearchResult
 from app.services import analysis as analysis_service
 from app.services import ingestion as ingestion_service
 from app.services import qa as qa_service
+from app.services import retrieval as retrieval_service
 
 MAX_UPLOAD_BYTES = 1_000_000   # 1 MB
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -142,3 +144,15 @@ async def ingest_document(
 ) -> dict:
     count = await ingestion_service.insert_document(session, doc.id, doc.content)
     return {"document_id": doc.id, "chunks_created": count}
+
+@router.post("/search", response_model=list[SearchResult], dependencies=[Depends(rate_limit)])
+async def search_document(
+    body: SearchRequest, session: SessionDep, current_user: CurrentUser
+) -> list[SearchResult]:
+    rows = await retrieval_service.retrieve_chunks(session, body.query, current_user.id, body.k)
+    return [
+        SearchResult(
+            document_id=c.document_id, chunk_index=c.chunk_index, content=c.content, distance=dist
+        )
+        for c, dist in rows
+    ]

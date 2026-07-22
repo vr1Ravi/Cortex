@@ -92,7 +92,7 @@
 - [x] **5.1** Embeddings — what they are, how similarity search works _(DONE)_
 - [x] **5.2** Chunking strategies (size, overlap, semantic) + trade-offs _(DONE)_
 - [x] **5.3** Vector DB — **pgvector** setup, `document_chunks` table, ingestion pipeline _(DONE)_
-- [ ] **5.4** Retrieval — top-k, filtering, hybrid search, reranking
+- [x] **5.4** Retrieval — nearest-neighbor search (cosine, top-k, owner-scoped) _(DONE)_
 - [ ] **5.5** The full **RAG pipeline** end-to-end (ingest → retrieve → generate + citations)
 - [ ] **5.6** **LangChain / LangGraph** — chains, orchestration
 - [ ] **5.7** **RAG evaluation** — measuring answer quality, faithfulness
@@ -195,5 +195,7 @@
 | 2026-07-20 | 5.2 Chunking | Done. `app/services/chunking.py` `chunk_text(text, chunk_size=800, overlap=150)` (fixed-size char chunks, `start += chunk_size - overlap`). Verified via scratch (deleted): 288 chars → 4 chunks with visible overlap. Learned why chunk (blurry-average whole-doc vector, input limits, stuff-only-relevant), size trade-off, overlap purpose, and that char-based cuts mid-word → boundary-aware/recursive splitting is the upgrade (5.6). |
 
 | 2026-07-20 | 5.3 pgvector + ingestion | Done. Swapped Docker image → `pgvector/pgvector:pg16`; installed `pgvector`; `app/models/chunk.py` `DocumentChunk` (Vector(768), owner-cascade FK); migration (manual `CREATE EXTENSION vector` + `Vector` import fix). Embeddings settings (gemini-embedding-001, dim 768). `embed_texts` (task_type RETRIEVAL_DOCUMENT) + `ingest_document` (chunk→embed→store, idempotent delete-first) + `POST /documents/{id}/ingest`. Ingested doc 3 → **62 chunks, 62 vectors, 768-dim** in pgvector. Refactored (user's catch) `_resilient` generic wrapper for both generate + embed. Hit real 429 (embed 100/min free limit — 62 chunks/ingest × retries) → lesson: throttle + Celery for ingestion. Bugs: FK `document`→`documents`, migration Vector import. |
+
+| 2026-07-21 | 5.4 Retrieval | Done. `app/services/retrieval.py` `retrieve_chunks(session, query, owner_id, k)` — embed query (RETRIEVAL_QUERY) → `select(DocumentChunk, cosine_distance.label('distance')).join(Document).where(owner_id).order_by(distance).limit(k)`. `app/schemas/search.py` (SearchRequest/SearchResult), `POST /documents/search`. Verified: "fix N+1?" → N+1 chunks ranked by distance (0.255/0.283/0.287) — semantic match, not keywords. Learned cosine_distance builds SQL (not Python), lower=more similar, owner-scope = multi-tenant safety. Bugs: `{}` vs `()` around stmt; SearchRequest vs SearchResult in response_model. |
 
 _(We'll tick boxes above and add rows here as we go.)_
