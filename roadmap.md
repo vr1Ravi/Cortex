@@ -107,6 +107,14 @@
 - [ ] **6.5** Observability — logging, tracing LLM calls, metrics
 - [ ] **6.6** Deployment + capstone polish → portfolio-ready
 
+### Phase 7 — Performance, Scale & System Design · 3 sessions _(post-deploy capstone review)_
+
+> A full pass back over the finished, deployed app with a **staff-engineer / system-design lens** — not building features, but auditing what we built: where it's slow, where it breaks under load, how it scales. This is the interview-defining phase.
+
+- [ ] **7.1** **Performance audit** — profile the hot paths; N+1 & slow queries; DB indexes (incl. pgvector ANN/`ivfflat`/`hnsw`); cache hit-rates; sync-in-async smells (e.g. `extract_text` blocking the loop)
+- [ ] **7.2** **Scalability & system design** — how each tier scales (stateless API replicas, Celery worker fleet, Postgres read-replicas/pooling, Redis, the queue as backpressure); find the bottleneck; back-of-envelope capacity (RPS, embeds/min ceiling, storage growth); draw the architecture diagram
+- [ ] **7.3** **Resilience & hardening** — failure modes & graceful degradation (LLM/DB/Redis down), timeouts/retries/circuit-breakers, rate-limit & abuse protection everywhere, idempotency, cost controls; write a short **system-design doc** (interview-ready)
+
 ---
 
 ## 📅 8-week timeline (starting Fri, Jul 3, 2026)
@@ -121,6 +129,7 @@
 | **6** | Aug 7 – Aug 13  | Phase 4 (4.5) → Phase 5 (5.1–5.4)     | **AI chat in Cortex**; embeddings + retrieval             |
 | **7** | Aug 14 – Aug 20 | Phase 5 (5.5–5.8)                     | **Full RAG + agent working end-to-end**                   |
 | **8** | Aug 21 – Aug 27 | Phase 6 (6.1–6.6)                     | Tested, Dockerized, deployed → **portfolio-ready** 🎉\*\* |
+| **9** | Aug 28 – Sep 3  | Phase 7 (7.1–7.3)                     | **System-design pass**: perf audited, scale + failure modes mapped, design doc written 🧭 |
 
 > Buffer built in. If a topic needs an extra session, we take it — the calendar flexes.
 
@@ -199,5 +208,7 @@
 | 2026-07-21 | 5.4 Retrieval | Done. `app/services/retrieval.py` `retrieve_chunks(session, query, owner_id, k)` — embed query (RETRIEVAL_QUERY) → `select(DocumentChunk, cosine_distance.label('distance')).join(Document).where(owner_id).order_by(distance).limit(k)`. `app/schemas/search.py` (SearchRequest/SearchResult), `POST /documents/search`. Verified: "fix N+1?" → N+1 chunks ranked by distance (0.255/0.283/0.287) — semantic match, not keywords. Learned cosine_distance builds SQL (not Python), lower=more similar, owner-scope = multi-tenant safety. Bugs: `{}` vs `()` around stmt; SearchRequest vs SearchResult in response_model. |
 
 | 2026-07-23 | 5.5 Full RAG pipeline | Done. `app/services/rag.py` `answer_with_rag` (RETRIEVE top-k → relevance floor MAX_DISTANCE=0.45 → AUGMENT: stuff chunks w/ `[source doc:chunk]` labels + grounding system instruction → GENERATE via `generate()`) → returns (answer, chunks). `app/schemas/rag.py` (RagRequest/Citation/RagResponse), `app/api/rag.py` `POST /rag/ask`. Verified: relevant Q → grounded cited answer across docs; off-topic → "not found" + no citations (+ no LLM call). **Core RAG loop complete.** User caught "retrieved ≠ used" (phantom citations) → added relevance floor + short-circuit. Noted gold-standard: LLM reports used sources via structured output. |
+
+| 2026-07-23 | 5.5b Auto-ingest + Celery-ify + PDF | Done (consolidation; ties 3.5+5.3). Real Celery task `ingest_document_task(doc_id)` in `app/worker.py`: sync task runs async work via `asyncio.run(_ingest_async(doc_id))` — opens its OWN `async_session_maker` session (no `get_db`), fetches doc, calls `insert_document`, `await engine.dispose()` in finally (connections bound to the event loop; fresh loop each task). Passes **doc_id (reference), not content** — don't put big payloads on the broker. Wired fire-and-forget `ingest_document_task.delay(id)` into create/upload/update; `/ingest` now a 202 re-ingest trigger (poll via `/tasks/{id}`). PDF support: `pip install pypdf`; `app/services/extraction.py` `extract_text(filename, bytes)` (PdfReader from BytesIO, `.pdf`→extract else UTF-8; empty→400 "no text"; = a hand-built "document loader"). Fixed latent bug `status.HTTP_413`→`HTTP_413_REQUEST_ENTITY_TOO_LARGE`. Verified: create/upload → 201 instant, worker chunks+embeds in bg; PDF ingests. Run: `celery -A app.worker.celery_app worker --loglevel=info` alongside uvicorn. Recall (correct): response returns in ms because embedding is offloaded to Celery — `.delay()` just enqueues to Redis. |
 
 _(We'll tick boxes above and add rows here as we go.)_

@@ -993,3 +993,65 @@ Generate (LLM answers from that context). (2) It retrieves only the RELEVANT chu
 instead of stuffing one whole doc → scales past the context window + returns citations. (3) top-K
 always returns the k nearest chunks even for an irrelevant query (relative ranking, not a threshold),
 and we cited all retrieved chunks — but "retrieved ≠ used"; the relevance floor + short-circuit fixes it.
+
+---
+
+## 5.5b — Auto-ingestion (Celery) + PDF extraction
+
+**Gotcha 1 — async work inside a *sync* Celery task.** A Celery task runs as a plain sync
+function — no event loop. Bridge with **`asyncio.run(coro())`**: spins up a fresh loop, runs the async
+work, tears it down. Two consequences: (1) the worker has **no request** → can't use `get_db`; it opens
+its OWN session from `async_session_maker`. (2) asyncpg connections are **bound to the event loop that
+created them**; `asyncio.run` makes a new loop each task, so a pooled connection from the last task is
+tied to a dead loop → `got Future attached to a different loop`. Fix: **`await engine.dispose()`** in a
+`finally` so the pool starts clean. Also: pass the task the **doc_id (a reference), not the content** —
+don't push big payloads through the broker (Redis); let the worker fetch fresh from the DB.
+
+**Gotcha 2 — fire-and-forget decoupling.** `ingest_document_task.delay(id)` just enqueues to Redis and
+returns instantly → the HTTP request returns `201` in ms while the slow embedding runs in the worker
+process. `create`/`update` must `commit()` before enqueue (they do) so the worker's *separate*
+transaction can see the row. Run the worker separately: `celery -A app.worker.celery_app worker`.
+
+**Gotcha 3 — PDFs aren't text.** A PDF is a binary format; `bytes.decode("utf-8")` throws. You must
+*extract* text first (`pypdf` `PdfReader`). `page.extract_text() or ""` (text-less pages return None).
+Scanned/image PDFs extract nothing → need OCR (out of scope) → fail with 400, don't ingest empty.
+`extract_text(filename, bytes)` = a **document loader** built by hand (LangChain ships these as
+`PyPDFLoader` etc. — see 5.6). Latent bug fixed: `status.HTTP_413` doesn't exist →
+`HTTP_413_REQUEST_ENTITY_TOO_LARGE`.
+
+**❓ Q:** Why does `POST /documents` now return in milliseconds when the embedding still takes 20+s?
+
+**A:** The heavy work (chunk + embed) is offloaded to Celery. `.delay()` only pushes a message onto the
+Redis queue and returns immediately; the request no longer waits — a worker process does the embedding
+off the request path.
+
+**Doubts cleared this session:**
+
+- **"Is there only ONE worker processing all files serially — isn't that slow?"** No. `celery ... worker`
+  starts a *manager* that forks a **pool** of child processes (default = 1 per CPU core), so one command
+  already runs N tasks in parallel (`--concurrency=N` to tune). And you can run **many** worker processes
+  / machines, all pulling from the same Redis queue → horizontal scaling. "The task is sync" means only
+  *one task's body* runs top-to-bottom with no event loop — it does NOT mean the system does one task at
+  a time. Real bottleneck for us isn't worker count, it's the **Gemini 100 embeds/min** limit (add a task
+  rate-limit so the fleet stays under the ceiling).
+
+- **"Why `asyncio.run` — what does it actually do?"** Calling an `async def` doesn't run it — it returns
+  a *coroutine* (a recipe). A coroutine only executes when an **event loop** drives it (and parks it at
+  each `await`). FastAPI/uvicorn *already have a loop running*, so in an endpoint you just `await`. A
+  Celery task is a plain **sync process with no loop** — so `await` is illegal and calling the coroutine
+  does nothing. `asyncio.run(coro)` = "build a fresh event loop, run this coroutine to completion
+  (driving every await inside), return its result, close the loop." It's the **bridge from the sync world
+  (Celery) into the async world (our await-based ingestion)**. Can't just make the task `async def` —
+  Celery calls it as a normal function, not with `await`.
+
+- **"300 users hit /upload at once — will the server survive? there's no rate limit."** Yes, *because*
+  we offloaded the work. The request path is now cheap (read → extract → 1 INSERT → `.delay()` → 201, in
+  ms); FastAPI (async) juggles hundreds of concurrent I/O-bound connections fine. The **queue absorbs the
+  spike** (300 messages pile in Redis instantly; workers drain them N at a time) — that buffering is
+  called **backpressure**, the main reason to use a queue. The old *inline* version (300 × 60 embeds
+  inside live requests) would have melted — the refactor is what makes the burst survivable. Real limits:
+  DB connection pool (jobs queue briefly, fine), downstream embed rate limit (jobs just wait — fine), and
+  the one *actual* gap → **no abuse protection on /upload**. Fix = one line: add `Depends(rate_limit)`
+  (the Redis INCR+EXPIRE limiter we already built) to `create`/`upload`, like the other endpoints.
+  Bonus smell: `extract_text` is sync CPU work called inside an async endpoint → blocks uvicorn's loop
+  for big PDFs; at scale, run it in a threadpool or push extraction into the Celery task too.

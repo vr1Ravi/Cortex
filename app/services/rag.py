@@ -24,7 +24,8 @@ async def answer_with_rag(
     # Keep only chunks actually close enough to be relevant.
     relevant = [(c, dist) for c, dist in rows if dist <= MAX_DISTANCE]
     if not relevant:
-        return "I couldn't find anything relevant in your documents.", []   # ← no citations, no LLM call
+        return "I couldn't find anything relevant in your documents.", []   
+               # ← no citations, no LLM call
     
     chunks = [chunk for chunk, _distance in relevant]
     if not chunks:

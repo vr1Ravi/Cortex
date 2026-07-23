@@ -15,9 +15,9 @@ from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdat
 from app.schemas.qa import AskRequest, AskResponse
 from app.schemas.search import SearchRequest, SearchResult
 from app.services import analysis as analysis_service
-from app.services import ingestion as ingestion_service
 from app.services import qa as qa_service
 from app.services import retrieval as retrieval_service
+from app.worker import ingest_document_task
 
 MAX_UPLOAD_BYTES = 1_000_000   # 1 MB
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -56,7 +56,9 @@ async def create_document(
     session: SessionDep, 
     current_user: CurrentUser
     ) -> Document:
-    return await document_repo.create(session, doc, owner_id=current_user.id)
+    created =  await document_repo.create(session, doc, owner_id=current_user.id)
+    ingest_document_task.delay(created.id)   # enqueue; worker ingests in the background
+    return created
 
 
 @router.put("/{doc_id}", response_model=DocumentResponse, summary="Update a document")
@@ -65,7 +67,9 @@ async def update_document(
     session: SessionDep,
     existing: Annotated[Document, Depends(get_owned_document_or_404)]
 ) -> DocumentResponse:
-    return await document_repo.update(session, existing, update)
+    updated = await document_repo.update(session, existing, update)
+    ingest_document_task.delay(updated.id)
+    return updated
 
 
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a document")
@@ -109,12 +113,14 @@ async def upload_document(
     try:
         content = content_bytes.decode("utf-8")
     except UnicodeDecodeError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "FIle must be UTF-8 text")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "File must be UTF-8 text")
     if not content.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "FIle is empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is empty")
     
     data = DocumentCreate(title=(file.filename or "untitled")[:200], content=content, tags=[])
-    return await document_repo.create(session, data, owner_id=current_user.id)
+    created =  await document_repo.create(session, data, owner_id=current_user.id)
+    ingest_document_task.delay(created.id)
+    return created
 
 @router.post(
     "/{doc_id}/analyze",
@@ -137,13 +143,16 @@ async def ask_document(
     answer = await qa_service.answer_from_document(body.question, doc.content)
     return AskResponse(answer=answer)
 
-@router.post("/{doc_id}/ingest", dependencies=[Depends(rate_limit)])
+@router.post(
+        "/{doc_id}/ingest",
+        status_code=status.HTTP_202_ACCEPTED,
+        dependencies=[Depends(rate_limit)]
+        )
 async def ingest_document(
-    session: SessionDep,
     doc: Annotated[Document, Depends(get_owned_document_or_404)]
 ) -> dict:
-    count = await ingestion_service.insert_document(session, doc.id, doc.content)
-    return {"document_id": doc.id, "chunks_created": count}
+    task = ingest_document_task.delay(doc.id)
+    return {"task_id": task.id, "document_id": doc.id,  "status": "queued"}
 
 @router.post("/search", response_model=list[SearchResult], dependencies=[Depends(rate_limit)])
 async def search_document(
