@@ -15,7 +15,7 @@ async def retrieve_chunks(session: AsyncSession, query: str, owner_id: int, k: i
 
     distance = DocumentChunk.embedding.cosine_distance(query_vec).label("distance")
     stmt = (
-        select(DocumentChunk, distance)
+        select(DocumentChunk, distance)                            # Selects two cols
         .join(Document, DocumentChunk.document_id == Document.id) # to reach owner_id
         .where(Document.owner_id == owner_id)                    # only THIS user's chunks
         .order_by(distance)                                     # ASC → nearest first

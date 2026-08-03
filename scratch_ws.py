@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
-from app.main import app
 
+from app.main import app
 
 with TestClient(app).websocket_connect("/demo/ws/echo") as ws:
     for m in ["hello", "cortex", "bye"]:

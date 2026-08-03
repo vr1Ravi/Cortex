@@ -1055,3 +1055,66 @@ off the request path.
   (the Redis INCR+EXPIRE limiter we already built) to `create`/`upload`, like the other endpoints.
   Bonus smell: `extract_text` is sync CPU work called inside an async endpoint → blocks uvicorn's loop
   for big PDFs; at scale, run it in a threadpool or push extraction into the Celery task too.
+
+---
+
+## 5.6 — LangChain / LCEL
+
+**Gotcha:** LangChain = **standard interfaces** (loader / splitter / embeddings / vectorstore / chat
+model — all swappable) **+ LCEL** composition. In LCEL you wire pieces with the **`|`** pipe (output of
+left → input of right); it works because *every* piece is a **`Runnable`** (`.invoke`/`.ainvoke`/
+`.stream`/`.batch`). Data **changes type at every `|`**: `str → dict → PromptValue → AIMessage → str`;
+building a chain = making each step's output shape match the next's input. A plain **`{dict}`** in a pipe
+is auto-coerced to a **`RunnableParallel`** (runs each branch on the same input → dict of results).
+**`RunnablePassthrough()`** passes input through unchanged. **`RunnablePassthrough.assign(k=…)`** =
+"keep every existing key, ADD key `k`" (that's how `rows` survived to the end for citations; a plain step
+*replaces* the dict). **`RunnableBranch((cond, run), default)`** = LCEL if/else (used for the relevance
+floor → no rows ⇒ canned NOT_FOUND, skips the LLM). **Takeaway:** LCEL wins for linear compose +
+streaming + provider-swap + ecosystem; hand-roll wins for **branching / control-flow / product rules**
+(our floor + citation contract took RunnableParallel + 2×`.assign` + RunnableBranch + 3 lambdas to match
+~8 plain lines). Streaming came free (vs the SSE plumbing we wrote in 4.2).
+
+**Trap (bit me 3×):** **bare class vs instance in a pipe.** A bare *callable* in `|` is auto-wrapped and
+*called* with the piped value — and a class is callable, so `StrOutputParser` (no `()`) becomes
+`StrOutputParser(msg)` → `TypeError: BaseModel.__init__() takes 1 positional argument but 2 were given`;
+`RunnablePassthrough` (no `()`) → `ValidationError: func.callable — Input should be callable`. Rule:
+**instances go in the pipe** → `StrOutputParser()`, `RunnablePassthrough()`, `RunnableLambda(fn)`. BUT
+`RunnablePassthrough.assign(...)` is a **classmethod** → correct *without* `()` on the class (it returns
+the instance for you). Separate trap: forgetting `await` on `retrieve_chunks` → `rows` is a coroutine →
+`TypeError: 'coroutine' object is not iterable` (missing-await tell).
+
+**❓ Q:** (1) What does `|` do and what interface makes it work on every piece? (2) What does
+`RunnablePassthrough.assign(answer=…)` do to the data vs a plain step? (3) When is LCEL worth it vs
+hand-rolled?
+
+**A:** (1) Pipes runnables — left's output feeds right's input; the shared **`Runnable`** interface
+(`.invoke/.ainvoke/.stream/.batch`) makes any piece connectable. (2) It **adds the `answer` key while
+keeping all existing keys** (`{rows,question,context}` → `{…,answer}`); a plain step would *replace* the
+whole dict with just its output. (3) LCEL for linear pipelines (compose + free streaming/async/batch +
+one-line provider swap + ecosystem); hand-rolled the moment you need branching / custom control flow /
+product-specific rules — fewer moving parts, no indirection, easier to debug.
+
+**Doubts cleared this session:**
+
+- **"Where does `distance` come from — `retrieve_chunks` looks like it returns only the chunk?"** It
+  returns **`(DocumentChunk, distance)` tuples**, because the query does `select(DocumentChunk, distance)`
+  — **two** things per row. `distance` isn't a table column; it's computed by **pgvector in the DB** from
+  `DocumentChunk.embedding.cosine_distance(query_vec).label("distance")` (the `<=>` operator), returned as
+  an extra column. Also: `.all()` returns whole rows (tuples); `.scalars().all()` would return only the
+  first entity (just the chunk) — that's why retrieval uses `.all()` and repos use `.scalars().all()`.
+
+- **"What/why is `_format_docs`?"** Retrieval returns *objects* (`(chunk, distance)` tuples) but a prompt
+  needs *text*. `_format_docs` is the adapter: `for c, _ in rows` (unpack tuple, `_` = ignore distance),
+  builds a labeled block `[source doc:chunk]\n{content}` per chunk, `"\n\n".join(...)` into one context
+  string for the `{context}` slot. Labels enable citing/traceability.
+
+- **"We didn't use RunnableParallel / I don't see citations — is it the prompt?"** (a) The plain `{dict}`
+  IS a RunnableParallel (implicit coercion). (b) Two separate reasons for "no citations": the endpoint
+  hardcoded `citation=[]` because the chain threw the rows away (fixed by carrying `rows` via
+  `.assign`), AND the LCEL prompt didn't instruct the model to cite inline (fixed by adding a cite line to
+  `RAG_PROMPT`) — two independent knobs.
+
+- **Re-caught "retrieved ≠ used":** the `citation` array lists **all** retrieved chunks that passed the
+  floor (5), but the answer only *used* one (`[source 4:2]`) → 4 citations are noise. Same as 5.5. Both
+  `/ask` and `/ask-lc` do this. Gold-standard = cite only *used* sources: parse the `[source d:c]` markers
+  out of the answer, or have the LLM return structured `used_sources` (the 4.3 pattern).
