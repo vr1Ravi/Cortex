@@ -1118,3 +1118,60 @@ product-specific rules — fewer moving parts, no indirection, easier to debug.
   floor (5), but the answer only *used* one (`[source 4:2]`) → 4 citations are noise. Same as 5.5. Both
   `/ask` and `/ask-lc` do this. Gold-standard = cite only *used* sources: parse the `[source d:c]` markers
   out of the answer, or have the LLM return structured `used_sources` (the 4.3 pattern).
+
+---
+
+## 5.7 — RAG evaluation
+
+**Gotcha:** RAG has **two failure points — retrieval & generation — and you MUST measure them
+separately**, because a bad answer is either "fetched the wrong chunks" (retrieval) or "hallucinated /
+ignored good chunks" (generation), and only separate scores tell you *which half to fix*. **Retrieval
+eval** is exact → no LLM: a fixed labeled set (question → expected_doc, plus an off-topic one with
+`expected_doc=None` to test the floor), scored with **hit-rate@k** (fraction where the right doc is in
+top-k), MRR (rewards higher rank), recall@k. **Generation eval** is fuzzy → you **can't use `==`** (two
+answers can be correct but worded differently), so use **LLM-as-judge**: a *second* LLM call that reads
+question+context+answer and returns a structured verdict (`Judgment{faithful, relevant, reason}` via
+`response_schema` — the 4.3 pattern). Result here: retrieval **67%** (1 real miss on the short/vague
+"What is Global?"), generation **faithful 2/2, relevant 2/2** → **diagnosis: generation is trustworthy,
+retrieval is the weak link → fix chunking/embeddings/k/query, NOT the prompt.** Caveats: tiny sample
+(real evals = 50–200 Qs); the judge is itself an LLM (spot-check vs human; often use a stronger judge
+model). This is what **RAGAS** automates.
+
+**❓ Q:** (1) Name RAG's two failure points and why measure them separately. (2) Why can't you grade a
+free-text answer with `==`, and what do you use instead? (3) Given retrieval 67% + generation faithful
+2/2 — where's the bug and what would you fix?
+
+**A:** (1) Retrieval (wrong chunks fetched) and generation (LLM hallucinates/ignores good chunks);
+separately, because the fix is completely different and a single end-to-end score can't tell you which
+half broke. (2) Two correct answers can be worded differently so string-equality marks a right answer
+wrong; use an **LLM-as-judge** (structured output) that recognizes "these mean the same thing." (3) The
+bug is in **retrieval** (67%, the weak link); generation is faithful → fix chunking / embeddings / k /
+query handling, **not** the prompt.
+
+**Doubts cleared this session:**
+
+- **"Why did we even do this? It's just a scratch file with predefined questions — what's the point?"**
+  It's a **test/measurement harness for the RAG pipeline** — the AI-quality equivalent of unit tests. The
+  fixed questions are a **yardstick**: change something in the flow (chunk size, embeddings, k, prompt,
+  model, floor, hand-built vs LangChain) → re-run → the number moves → keep or revert. Without it you're
+  guessing ("seems better?"); with it you can *say* "retrieval improved 67%→80%." That's the difference
+  between shipping AI and just demoing it.
+
+- **"So it's just for testing / when we change the flow?"** Yes. Also (a) a **regression guard** — catches
+  silent degradation from a library/model-version bump, not just intended changes; (b) in **production it
+  runs continuously**: on every deploy as a CI quality gate (block if score drops), on a schedule (cron)
+  to catch **drift** (new docs change the vector space, the provider updates the model under you), and on
+  **live traffic** (sample real answers, run the judge on them). Ties to Phase 6 observability + Phase 7.
+
+- **"What are 'the retrieval query' and 'the relevance floor' (things we might change)?"** *Retrieval
+  query* = the text you actually search with; currently the raw question is embedded as-is, but you can
+  **rewrite/expand** it (e.g. fix a vague "What is Global?") or add keyword/hybrid search before
+  embedding. *Relevance floor* = `MAX_DISTANCE` (0.45) cutoff on distance (lower = more similar): lower it
+  → stricter (fewer false matches but may drop correct-but-far chunks); raise it → looser (catch more but
+  more junk). It's a **precision-vs-recall dial**, and the eval set is exactly how you'd *tune* it.
+
+- **"Where is the LLM-as-judge step in the file?"** `judge()` (`scratch_eval.py`) — sends
+  question+context+answer to the LLM, returns a `Judgment`; that's where the model recognizes semantic
+  equivalence that `==` can't. Step 1 = `main()` (retrieval, exact `==`/set-membership, no LLM); Step 2 =
+  `eval_generation()` (runs real RAG → calls `judge()`). Only whichever `asyncio.run(...)` is at the
+  bottom actually runs.
