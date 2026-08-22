@@ -1175,3 +1175,105 @@ query handling, **not** the prompt.
   equivalence that `==` can't. Step 1 = `main()` (retrieval, exact `==`/set-membership, no LLM); Step 2 =
   `eval_generation()` (runs real RAG → calls `judge()`). Only whichever `asyncio.run(...)` is at the
   bottom actually runs.
+
+---
+
+## 5.8 — Agent with tools (+ LangGraph) · PHASE 5 FINALE
+
+**Gotcha:** **chain vs agent.** A *chain* is a **fixed pipeline YOU design** (always retrieve→generate;
+LLM only writes text). An *agent* hands the LLM a **goal + tools** and lets **the LLM decide the flow** —
+which tool, what args, and when it's done (0, 1, or many calls). Mechanism = the **function-calling
+loop**: (1) describe tools to the model; (2) model replies with either a final answer OR a *request* to
+call tool X with args — **it can't run code, it only ASKS**; (3) **YOUR code executes the tool**; (4)
+append the result, loop; (5) stop at a final answer, bounded by `MAX_STEPS` (safety/cost). Tool
+**descriptions are the ONLY routing signal** — write them well. Gemini specifics: append the model turn
+(`response.candidates[0].content`, role=model) then the result as `types.Content(role="user",
+parts=[types.Part.from_function_response(name=, response={...})])`; detect calls via
+`response.function_calls`. **LangGraph = agent-as-a-state-machine:** **nodes = units of work** (`agent`
+node calls the LLM; `tools` node executes tools) — NOT the function declarations; **edges** connect them,
+and the **conditional edge** after `agent` = the `if` ("tool requested? → tools node, else → END"), the
+loop-back = the `while`. `create_react_agent(llm, tools=[@tool closures])` builds that whole graph.
+**Prod concern: agents are call-hungry** — each step is an LLM call → more latency, cost, and rate-limit
+pressure (hit gemini free-tier 429: 5 req/min); cap steps + cache.
+
+**Q:** (1) Chain vs agent — the core difference? (2) In the loop, who runs the tool and what does the
+LLM contribute? (3) In LangGraph, what are the two nodes and what does the conditional edge decide?
+
+**A:** (1) A chain is a fixed pipeline you script (LLM just fills text); an agent lets the LLM decide the
+flow — which tool, what args, when done — given a goal + tools. (2) **Your code** executes the tool; the
+**LLM only decides which tool + its arguments + when to stop** (it *requests*, never runs). (3) Nodes =
+**`agent`** (calls the LLM) and **`tools`** (executes tools); the **conditional edge** after `agent`
+decides "tool requested? → `tools` node (then loop back); else → `END`" — i.e. it's the `if`, and the
+loop-back is the `while`.
+
+**Doubts cleared this session:**
+
+- **"Is this a bug in my agent.py?" (the 429)** No — the code was fine; it was a **rate-limit** (free
+  tier = 5 requests/min for the model). Agents multiply LLM calls (each loop step = a call; one question
+  = 2+ calls), so they blow through quotas/cost far faster than single-shot RAG. Fix was just: wait a
+  minute, run one question at a time. (Real lesson, not just free-tier: budget/cap/cache agent calls.)
+
+- **What we observed (LangGraph multi-hop):** for "first project in my resume?" the agent chose
+  `list_documents` FIRST (to find which doc is the resume), then `search_documents` with its own query,
+  then answered — the graph cycling `agent→tools→agent→tools→agent→END`. Proof the model *plans* the
+  flow; we never scripted "list then search."
+
+---
+
+## 6.1 — Testing basics (pytest + async + FastAPI)
+
+**Gotcha:** pytest auto-discovers `test_*.py` / `test_*` functions; use plain `assert`. Async app →
+plain pytest can't run `async def` tests → add **pytest-asyncio** + `asyncio_mode="auto"` (no per-test
+marker). Test FastAPI **without a live server**: `httpx.AsyncClient(transport=ASGITransport(app=app))`
+calls the app **in-process** (fast, no port, no network). A **fixture** = reusable setup pytest injects
+by name (like `Depends` for tests); put shared ones in **`conftest.py`** (auto-available, no import).
+Trap: `ModuleNotFoundError: No module named 'app'` when running pytest → add **`pythonpath = "."`** to
+`[tool.pytest.ini_options]` (project root isn't on sys.path by default). (6.2 test-DB + dependency
+overrides + LLM mocking = drafted but SKIPPED for now.)
+
+## 6.3 — Docker + Compose
+
+**Gotcha:** **image** = frozen blueprint (built once from a `Dockerfile`); **container** = a running
+instance of an image; **Dockerfile** = the recipe; **Docker Compose** = orchestrates MANY containers as
+one app (`docker compose up`). **Layer caching:** each Dockerfile line = a cached layer; COPY
+`requirements.txt` + install deps *before* COPY of code, so a code edit doesn't rebuild the deps layer.
+**Container networking (the big one):** inside Compose, services reach each other by **service name**
+(`db:5432`, `redis:6379`) — NOT `localhost` (which means the container itself). So containerized app must
+override DATABASE_URL/REDIS_URL/CELERY_* to point at service names (`env_file: .env` for secrets +
+`environment:` to override the URLs). **`depends_on` + healthcheck**: start order ≠ ready — use
+`condition: service_healthy` (db `pg_isready`) so migrations don't race an unready DB. Worker = same
+image, different `command` (celery). `api.command = alembic upgrade head && uvicorn`. `docker compose up
+--build` = rebuild buildable images then start the fleet. Images live in Docker's daemon store (Desktop
+Linux VM), layers deduped — not in your project. `.dockerignore` keeps venv/.env/tests out of the image.
+
+**❓ Q:** (1) image vs container vs Compose? (2) Why does the containerized app use `db:5432` instead of
+`localhost:5432`? (3) Why COPY requirements + install BEFORE COPY of the app code?
+
+**A:** (1) Image = frozen blueprint (from Dockerfile); container = a running instance of it; Compose =
+runs a group of containers together as one app. (2) Inside Compose, `localhost` = the container itself;
+services reach each other by service name over Compose's shared network, so the DB is at `db:5432`. (3)
+Layer caching — deps change rarely, code changes constantly; installing deps in an earlier layer means a
+code edit reuses the cached deps layer instead of reinstalling everything.
+
+**Doubts cleared this session:**
+
+- **"What is Docker Compose (vs Docker)?"** Docker build/run handles ONE container; Compose describes &
+  runs a GROUP (api+worker+db+redis) from one YAML with one command. It also auto-creates the shared
+  network that makes `db:5432` name-resolution work, and manages the whole lifecycle (up/down/logs).
+  Analogy: Dockerfile = recipe for one dish; Compose = head chef running the whole kitchen.
+
+- **"What did `docker compose up --build` do?"** `--build` = rebuild the buildable images (api/worker)
+  from the Dockerfile first; `up` = create network+volumes, start services in dependency order (db→wait
+  healthy→redis→api runs migrations+uvicorn→worker), stream logs. Plain `up` reuses existing images;
+  `--build` forces a fresh build (use after code/deps/Dockerfile changes). Use `-d` for detached.
+
+- **"Where does the build live?"** Not in the project — in Docker's internal image store (on Mac, inside
+  the Docker Desktop Linux VM at `/var/lib/docker`, one managed disk file). See via `docker images` or
+  Desktop's Images tab. Layers are content-addressed & shared across images (so 3×1.25GB overlap heavily).
+  Compose names its images `<folder>-<service>` (`fastapi-api`), separate from the manual `cortex-api`.
+
+- **The collation WARNING** ("collation version 2.41 vs OS 2.36") = cosmetic, from the pgvector image's
+  OS glibc differing from when the volume's DB was created; harmless; silence with
+  `ALTER DATABASE cortex REFRESH COLLATION VERSION;`. It dominated the foreground log only because idle
+  Postgres emits it on each healthcheck connection while api/worker sat quiet — use `up -d` + per-service
+  `logs`. `exited with code 137` on Ctrl+C = normal SIGKILL after the graceful-stop grace period.

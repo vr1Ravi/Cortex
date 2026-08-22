@@ -5,3 +5,6 @@ target-version = "py310"
 [tool.ruff.lint]
 # E,F = pyflakes/pycodestyle errors; I = import sorting; UP = modern-python upgrades
 select = ["E", "F", "I", "UP"]
+[tool.pytest.ini_options]
+asyncio_mode = "auto"          # treat every async test as an asyncio test, no per-test marker
+pythonpath = "."
